@@ -9,5 +9,10 @@ print(world:stats())
 
 world:dim(999)
 
-local res, err = pcall(function() world:dim() end)
+local res = pcall(function() world:dim() end)
 assert(not res)
+
+local entities = world:get_entities()
+
+print(#entities.alive, 'alive')
+print(#entities.dead, 'dead')

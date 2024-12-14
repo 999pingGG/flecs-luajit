@@ -1,5 +1,6 @@
 local ffi = require 'ffi'
 local buffer = require 'string.buffer'
+local table = table
 
 ecs_ftime_t = ecs_ftime_t or 'float'
 ecs_float_t = ecs_float_t or 'float'
@@ -10,6 +11,10 @@ ffi.cdef('typedef ' .. ecs_float_t .. ' ecs_float_t;')
 ffi.cdef[[
 typedef uint64_t ecs_id_t;
 typedef ecs_id_t ecs_entity_t;
+typedef uint8_t ecs_flags8_t;
+typedef uint16_t ecs_flags16_t;
+typedef uint32_t ecs_flags32_t;
+typedef uint64_t ecs_flags64_t;
 typedef struct ecs_world_t ecs_world_t;
 typedef struct ecs_world_info_t {
   ecs_entity_t last_component_id;
@@ -156,12 +161,27 @@ typedef struct ecs_world_stats_t {
   int64_t last_;
   int32_t t;
 } ecs_world_stats_t;
+typedef struct ecs_entities_t {
+    const ecs_entity_t *ids;
+    int32_t count;
+    int32_t alive_count;
+} ecs_entities_t;
 
 ecs_world_t* ecs_init(void);
+ecs_world_t* ecs_mini(void);
 void ecs_fini(ecs_world_t *world);
+bool ecs_is_fini(const ecs_world_t *world);
 const ecs_world_info_t* ecs_get_world_info(const ecs_world_t *world);
 void ecs_world_stats_get(const ecs_world_t *world, ecs_world_stats_t *stats);
 void ecs_dim(ecs_world_t *world, int32_t entity_count);
+void ecs_quit(ecs_world_t *world);
+bool ecs_should_quit(const ecs_world_t *world);
+ecs_entities_t ecs_get_entities(const ecs_world_t *world);
+ecs_flags32_t ecs_world_get_flags(const ecs_world_t *world);
+void ecs_measure_frame_time(ecs_world_t *world, bool enable);
+void ecs_measure_system_time(ecs_world_t *world, bool enable);
+void ecs_set_target_fps(ecs_world_t *world, ecs_ftime_t fps);
+void ecs_set_default_query_flags(ecs_world_t *world, ecs_flags32_t flags);
 ]]
 
 local ecs_world_info_t = ffi.typeof 'ecs_world_info_t'
@@ -170,6 +190,9 @@ local ecs_metric_t = ffi.typeof 'ecs_metric_t'
 
 ffi.metatype('ecs_world_t', {
   __index = {
+    is_fini = function(self)
+      return ffi.C.ecs_is_fini(self)
+    end,
     info = function(self)
       return ffi.C.ecs_get_world_info(self)
     end,
@@ -180,6 +203,42 @@ ffi.metatype('ecs_world_t', {
     end,
     dim = function(self, entity_count)
       ffi.C.ecs_dim(self, entity_count)
+    end,
+    quit = function(self)
+      ffi.C.ecs_quit(self)
+    end,
+    should_quit = function(self)
+      return ffi.C.ecs_should_quit(self)
+    end,
+    get_entities = function(self)
+      local entities = ffi.C.ecs_get_entities(self)
+      local alive = {}
+      local dead = {}
+
+      for i = 0, entities.alive_count - 1 do
+        table.insert(alive, entities.ids[i])
+      end
+
+      for i = entities.alive_count + 1, entities.count - 1 do
+        table.insert(dead, entities.ids[i])
+      end
+
+      return { alive = alive, dead = dead }
+    end,
+    get_flags = function(self)
+      return ffi.C.ecs_world_get_flags(self)
+    end,
+    measure_frame_time = function(self, enable)
+      ffi.C.ecs_measure_frame_time(self, enable)
+    end,
+    measure_system_time = function(self, enable)
+      ffi.C.ecs_measure_system_time(self, enable)
+    end,
+    set_target_fps = function(self, fps)
+      ffi.C.ecs_set_target_fps(self, fps)
+    end,
+    set_default_query_flags = function(self, flags)
+      ffi.C.ecs_set_default_query_flags(self, flags)
     end,
   },
   __metatable = nil,
@@ -426,6 +485,10 @@ local ret = {}
 
 function ret.init()
   return ffi.gc(ffi.C.ecs_init(), ffi.C.ecs_fini)
+end
+
+function ret.mini()
+  return ffi.gc(ffi.C.ecs_mini(), ffi.C.ecs_fini)
 end
 
 return ret
