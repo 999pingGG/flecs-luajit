@@ -24,7 +24,7 @@ int main(void) {
 
   luaL_openlibs(L);
 
-  if (luaL_loadfile(L, "lua/ecs.lua") != LUA_OK) {
+  if (luaL_loadfile(L, "tests.lua") != LUA_OK) {
     fprintf(stderr, "%s\n", lua_tostring(L, -1));
     goto error;
   }

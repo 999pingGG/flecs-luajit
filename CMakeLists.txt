@@ -8,10 +8,3 @@ add_executable(flecs_luajit src/main.c libs/flecs/flecs.c)
 target_include_directories(flecs_luajit PRIVATE include libs/flecs)
 
 target_link_libraries(flecs_luajit PRIVATE luajit-5.1)
-
-add_custom_command(
-        TARGET flecs_luajit POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/lua
-        ${CMAKE_BINARY_DIR}/lua
-)
