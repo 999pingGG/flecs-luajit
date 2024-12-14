@@ -1,3 +1,4 @@
+local bit = require 'bit'
 local ffi = require 'ffi'
 local buffer = require 'string.buffer'
 local table = table
@@ -11,6 +12,10 @@ ffi.cdef('typedef ' .. ecs_float_t .. ' ecs_float_t;')
 ffi.cdef[[
 typedef uint64_t ecs_id_t;
 typedef ecs_id_t ecs_entity_t;
+typedef struct ecs_value_t {
+  ecs_entity_t type;
+  void *ptr;
+} ecs_value_t;
 typedef uint8_t ecs_flags8_t;
 typedef uint16_t ecs_flags16_t;
 typedef uint32_t ecs_flags32_t;
@@ -166,6 +171,104 @@ typedef struct ecs_entities_t {
     int32_t count;
     int32_t alive_count;
 } ecs_entities_t;
+typedef struct ecs_entity_desc_t {
+  int32_t _canary;
+  ecs_entity_t id;
+  ecs_entity_t parent;
+  const char *name;
+  const char *sep;
+  const char *root_sep;
+  const char *symbol;
+  bool use_low_id;
+  const ecs_id_t *add;
+  const ecs_value_t *set;
+  const char *add_expr;
+} ecs_entity_desc_t;
+extern const ecs_id_t ECS_PAIR;
+extern const ecs_id_t ECS_AUTO_OVERRIDE;
+extern const ecs_id_t ECS_TOGGLE;
+extern const ecs_entity_t FLECS_IDEcsComponentID_;
+extern const ecs_entity_t FLECS_IDEcsIdentifierID_;
+extern const ecs_entity_t FLECS_IDEcsPolyID_;
+extern const ecs_entity_t FLECS_IDEcsDefaultChildComponentID_;
+extern const ecs_entity_t EcsQuery;
+extern const ecs_entity_t EcsObserver;
+extern const ecs_entity_t EcsSystem;
+extern const ecs_entity_t FLECS_IDEcsTickSourceID_;
+extern const ecs_entity_t FLECS_IDEcsPipelineQueryID_;
+extern const ecs_entity_t FLECS_IDEcsTimerID_;
+extern const ecs_entity_t FLECS_IDEcsRateFilterID_;
+extern const ecs_entity_t EcsFlecs;
+extern const ecs_entity_t EcsFlecsCore;
+extern const ecs_entity_t EcsWorld;
+extern const ecs_entity_t EcsWildcard;
+extern const ecs_entity_t EcsAny;
+extern const ecs_entity_t EcsThis;
+extern const ecs_entity_t EcsVariable;
+extern const ecs_entity_t EcsTransitive;
+extern const ecs_entity_t EcsReflexive;
+extern const ecs_entity_t EcsFinal;
+extern const ecs_entity_t EcsOnInstantiate;
+extern const ecs_entity_t EcsOverride;
+extern const ecs_entity_t EcsInherit;
+extern const ecs_entity_t EcsDontInherit;
+extern const ecs_entity_t EcsSymmetric;
+extern const ecs_entity_t EcsExclusive;
+extern const ecs_entity_t EcsAcyclic;
+extern const ecs_entity_t EcsTraversable;
+extern const ecs_entity_t EcsWith;
+extern const ecs_entity_t EcsOneOf;
+extern const ecs_entity_t EcsCanToggle;
+extern const ecs_entity_t EcsTrait;
+extern const ecs_entity_t EcsRelationship;
+extern const ecs_entity_t EcsTarget;
+extern const ecs_entity_t EcsPairIsTag;
+extern const ecs_entity_t EcsName;
+extern const ecs_entity_t EcsSymbol;
+extern const ecs_entity_t EcsAlias;
+extern const ecs_entity_t EcsChildOf;
+extern const ecs_entity_t EcsIsA;
+extern const ecs_entity_t EcsDependsOn;
+extern const ecs_entity_t EcsSlotOf;
+extern const ecs_entity_t EcsModule;
+extern const ecs_entity_t EcsPrivate;
+extern const ecs_entity_t EcsPrefab;
+extern const ecs_entity_t EcsDisabled;
+extern const ecs_entity_t EcsNotQueryable;
+extern const ecs_entity_t EcsOnAdd;
+extern const ecs_entity_t EcsOnRemove;
+extern const ecs_entity_t EcsOnSet;
+extern const ecs_entity_t EcsMonitor;
+extern const ecs_entity_t EcsOnTableCreate;
+extern const ecs_entity_t EcsOnTableDelete;
+extern const ecs_entity_t EcsOnTableEmpty;
+extern const ecs_entity_t EcsOnTableFill;
+extern const ecs_entity_t EcsOnDelete;
+extern const ecs_entity_t EcsOnDeleteTarget;
+extern const ecs_entity_t EcsRemove;
+extern const ecs_entity_t EcsDelete;
+extern const ecs_entity_t EcsPanic;
+extern const ecs_entity_t EcsSparse;
+extern const ecs_entity_t EcsUnion;
+extern const ecs_entity_t EcsPredEq;
+extern const ecs_entity_t EcsPredMatch;
+extern const ecs_entity_t EcsPredLookup;
+extern const ecs_entity_t EcsScopeOpen;
+extern const ecs_entity_t EcsScopeClose;
+extern const ecs_entity_t EcsEmpty;
+extern const ecs_entity_t FLECS_IDEcsPipelineID_;
+extern const ecs_entity_t EcsOnStart;
+extern const ecs_entity_t EcsPreFrame;
+extern const ecs_entity_t EcsOnLoad;
+extern const ecs_entity_t EcsPostLoad;
+extern const ecs_entity_t EcsPreUpdate;
+extern const ecs_entity_t EcsOnUpdate;
+extern const ecs_entity_t EcsOnValidate;
+extern const ecs_entity_t EcsPostUpdate;
+extern const ecs_entity_t EcsPreStore;
+extern const ecs_entity_t EcsOnStore;
+extern const ecs_entity_t EcsPostFrame;
+extern const ecs_entity_t EcsPhase;
 
 ecs_world_t* ecs_init(void);
 ecs_world_t* ecs_mini(void);
@@ -182,11 +285,38 @@ void ecs_measure_frame_time(ecs_world_t *world, bool enable);
 void ecs_measure_system_time(ecs_world_t *world, bool enable);
 void ecs_set_target_fps(ecs_world_t *world, ecs_ftime_t fps);
 void ecs_set_default_query_flags(ecs_world_t *world, ecs_flags32_t flags);
+ecs_entity_t ecs_new(ecs_world_t *world);
+bool ecs_is_alive(const ecs_world_t *world, ecs_entity_t e);
+const char* ecs_get_name(const ecs_world_t *world, ecs_entity_t entity);
+ecs_entity_t ecs_set_name(ecs_world_t *world, ecs_entity_t entity, const char *name);
+ecs_entity_t ecs_lookup(const ecs_world_t *world, const char *path);
+void ecs_make_alive(ecs_world_t *world, ecs_entity_t entity);
+ecs_entity_t ecs_get_scope(const ecs_world_t *world);
+void ecs_add_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
+ecs_entity_t ecs_entity_init(ecs_world_t *world, const ecs_entity_desc_t *desc);
 ]]
 
 local ecs_world_info_t = ffi.typeof 'ecs_world_info_t'
 local ecs_world_stats_t = ffi.typeof 'ecs_world_stats_t'
 local ecs_metric_t = ffi.typeof 'ecs_metric_t'
+local uint32_t = ffi.typeof 'uint32_t'
+local uint64_t = ffi.typeof 'uint64_t'
+
+local function is_entity(entity)
+  return type(entity) == 'cdata' and ffi.typeof(entity) == uint64_t
+end
+
+local function ecs_entity_t_comb(lo, hi)
+  return bit.lshift(ffi.cast(uint64_t, hi), 32) + ffi.cast(uint32_t, lo)
+end
+
+local function ecs_pair(pred, obj)
+  return bit.bor(ffi.C.ECS_PAIR, ecs_entity_t_comb(obj, pred))
+end
+
+local function ecs_add_pair(world, subject, first, second)
+  return ffi.C.ecs_add_id(world, subject, ecs_pair(first, second))
+end
 
 ffi.metatype('ecs_world_t', {
   __index = {
@@ -239,6 +369,88 @@ ffi.metatype('ecs_world_t', {
     end,
     set_default_query_flags = function(self, flags)
       ffi.C.ecs_set_default_query_flags(self, flags)
+    end,
+    new_entity = function(self, arg1, arg2, arg3)
+      local entity
+      local name
+      local components
+
+      -- TODO: Omit checks since passing the values to a C function checks them anyway??
+      if not arg1 and not arg2 then
+        --  entity | name(string)
+        entity = ffi.C.ecs_new(self)
+      elseif arg2 and not arg3 then
+        if is_entity(arg1) then
+          -- entity, name (string)
+          entity = arg1
+          if type(arg2) == 'string' then
+            name = arg2
+          else
+            error('Expected a name after the entity.', 2)
+          end
+        else
+          -- name (string|nil), components
+          name = arg1
+          components = arg2
+        end
+      elseif arg1 and arg3 then
+        -- entity, name (string|nil), components
+        entity = arg1
+        name = arg2
+        components = arg3
+      end
+
+      if entity and name and ffi.C.ecs_is_alive(self, entity) then
+        local existing = ffi.C.ecs_get_name(self, entity)
+        if existing ~= nil then
+          if ffi.string(existing) ~= name then
+            return entity
+          end
+
+          error('Entity redefined with a different name.', 2)
+        end
+      end
+
+      if not entity and name then
+        entity = ffi.C.ecs_lookup(self, name)
+        if entity then
+          return entity
+        end
+      end
+
+      -- Create an entity, the following functions will take the same ID.
+      if not entity and (arg1 or arg2) then
+        entity = ffi.C.ecs_new(self)
+      end
+
+      if entity and not ffi.C.ecs_is_alive(self, entity) then
+        ffi.C.ecs_make_alive(self, entity)
+      end
+
+      local scope = ffi.C.ecs_get_scope(self)
+      if scope ~= 0 then
+        ecs_add_pair(self, entity, ffi.C.EcsChildOf, scope)
+      end
+
+      if components then
+        -- TODO: Check whether this creates under the current scope, if any.
+        entity = ffi.C.ecs_entity_init(self, { id = entity, add_expr = components })
+      end
+
+      if name then
+        ffi.C.ecs_set_name(self, entity, name)
+      end
+
+      return entity
+    end,
+    get_name = function(self, entity)
+      local name = ffi.C.ecs_get_name(self, entity)
+      if name ~= nil then
+        return ffi.string(name)
+      end
+    end,
+    set_name = function(self, entity, name)
+      ffi.C.ecs_set_name(self, entity, name)
     end,
   },
   __metatable = nil,
