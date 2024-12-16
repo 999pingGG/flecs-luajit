@@ -184,6 +184,26 @@ typedef struct ecs_entity_desc_t {
   const ecs_value_t *set;
   const char *add_expr;
 } ecs_entity_desc_t;
+typedef struct ecs_array_desc_t {
+  ecs_entity_t entity;
+  ecs_entity_t type;
+  int32_t count;
+} ecs_array_desc_t;
+typedef enum ecs_type_kind_t {
+  EcsPrimitiveType,
+  EcsBitmaskType,
+  EcsEnumType,
+  EcsStructType,
+  EcsArrayType,
+  EcsVectorType,
+  EcsOpaqueType,
+  EcsTypeKindLast = EcsOpaqueType,
+} ecs_type_kind_t;
+typedef struct EcsType {
+  ecs_type_kind_t kind;
+  bool existing;
+  bool partial;
+} EcsType;
 extern const ecs_id_t ECS_PAIR;
 extern const ecs_id_t ECS_AUTO_OVERRIDE;
 extern const ecs_id_t ECS_TOGGLE;
@@ -269,6 +289,39 @@ extern const ecs_entity_t EcsPreStore;
 extern const ecs_entity_t EcsOnStore;
 extern const ecs_entity_t EcsPostFrame;
 extern const ecs_entity_t EcsPhase;
+extern const ecs_entity_t FLECS_IDEcsTypeID_;
+extern const ecs_entity_t FLECS_IDEcsTypeSerializerID_;
+extern const ecs_entity_t FLECS_IDEcsPrimitiveID_;
+extern const ecs_entity_t FLECS_IDEcsEnumID_;
+extern const ecs_entity_t FLECS_IDEcsBitmaskID_;
+extern const ecs_entity_t FLECS_IDEcsMemberID_;
+extern const ecs_entity_t FLECS_IDEcsMemberRangesID_;
+extern const ecs_entity_t FLECS_IDEcsStructID_;
+extern const ecs_entity_t FLECS_IDEcsArrayID_;
+extern const ecs_entity_t FLECS_IDEcsVectorID_;
+extern const ecs_entity_t FLECS_IDEcsOpaqueID_;
+extern const ecs_entity_t FLECS_IDEcsUnitID_;
+extern const ecs_entity_t FLECS_IDEcsUnitPrefixID_;
+extern const ecs_entity_t EcsConstant;
+extern const ecs_entity_t EcsQuantity;
+extern const ecs_entity_t FLECS_IDecs_bool_tID_;
+extern const ecs_entity_t FLECS_IDecs_char_tID_;
+extern const ecs_entity_t FLECS_IDecs_byte_tID_;
+extern const ecs_entity_t FLECS_IDecs_u8_tID_;
+extern const ecs_entity_t FLECS_IDecs_u16_tID_;
+extern const ecs_entity_t FLECS_IDecs_u32_tID_;
+extern const ecs_entity_t FLECS_IDecs_u64_tID_;
+extern const ecs_entity_t FLECS_IDecs_uptr_tID_;
+extern const ecs_entity_t FLECS_IDecs_i8_tID_;
+extern const ecs_entity_t FLECS_IDecs_i16_tID_;
+extern const ecs_entity_t FLECS_IDecs_i32_tID_;
+extern const ecs_entity_t FLECS_IDecs_i64_tID_;
+extern const ecs_entity_t FLECS_IDecs_iptr_tID_;
+extern const ecs_entity_t FLECS_IDecs_f32_tID_;
+extern const ecs_entity_t FLECS_IDecs_f64_tID_;
+extern const ecs_entity_t FLECS_IDecs_string_tID_;
+extern const ecs_entity_t FLECS_IDecs_entity_tID_;
+extern const ecs_entity_t FLECS_IDecs_id_tID_;
 
 ecs_world_t* ecs_init(void);
 ecs_world_t* ecs_mini(void);
@@ -294,6 +347,43 @@ void ecs_make_alive(ecs_world_t *world, ecs_entity_t entity);
 ecs_entity_t ecs_get_scope(const ecs_world_t *world);
 void ecs_add_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
 ecs_entity_t ecs_entity_init(ecs_world_t *world, const ecs_entity_desc_t *desc);
+void ecs_delete(ecs_world_t *world, ecs_entity_t entity);
+const char* ecs_get_symbol(const ecs_world_t *world, ecs_entity_t entity);
+char* ecs_get_path_w_sep(
+  const ecs_world_t *world,
+  ecs_entity_t parent,
+  ecs_entity_t child,
+  const char *sep,
+  const char *prefix
+);
+ecs_entity_t ecs_lookup_child(const ecs_world_t *world, ecs_entity_t parent, const char *name);
+ecs_entity_t ecs_lookup_path_w_sep(
+  const ecs_world_t *world,
+  ecs_entity_t parent,
+  const char *path,
+  const char *sep,
+  const char *prefix,
+  bool recursive
+);
+ecs_entity_t ecs_lookup_symbol(const ecs_world_t *world, const char *symbol, bool lookup_as_path, bool recursive);
+void ecs_set_alias(ecs_world_t *world, ecs_entity_t entity, const char *name);
+bool ecs_has_id(const ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
+bool ecs_owns_id(const ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
+bool ecs_is_valid(const ecs_world_t *world, ecs_entity_t entity);
+ecs_entity_t ecs_get_alive(const ecs_world_t *world, ecs_entity_t entity);
+bool ecs_exists(const ecs_world_t *world, ecs_entity_t entity);
+void ecs_remove_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
+void ecs_clear(ecs_world_t *world, ecs_entity_t entity);
+void ecs_enable(ecs_world_t *world, ecs_entity_t entity, bool enabled);
+void ecs_enable_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id, bool enable);
+int32_t ecs_count_id(const ecs_world_t *world, ecs_id_t entity);
+void ecs_delete_with(ecs_world_t *world, ecs_id_t id);
+ecs_entity_t ecs_get_target(const ecs_world_t *world, ecs_entity_t entity, ecs_entity_t rel, int32_t index);
+bool ecs_is_enabled_id(const ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
+int ecs_meta_from_desc(ecs_world_t *world, ecs_entity_t component, ecs_type_kind_t kind, const char *desc);
+ecs_entity_t ecs_array_init(ecs_world_t *world, const ecs_array_desc_t *desc);
+void ecs_set_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id, size_t size, const void *ptr);
+const void* ecs_get_id(const ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
 ]]
 
 local ecs_world_info_t = ffi.typeof 'ecs_world_info_t'
@@ -301,9 +391,21 @@ local ecs_world_stats_t = ffi.typeof 'ecs_world_stats_t'
 local ecs_metric_t = ffi.typeof 'ecs_metric_t'
 local uint32_t = ffi.typeof 'uint32_t'
 local uint64_t = ffi.typeof 'uint64_t'
+local uint64_t_vla = ffi.typeof 'uint64_t[?]'
+local EcsType = ffi.typeof 'EcsType'
+local ecs_entity_desc_t = ffi.typeof 'ecs_entity_desc_t'
+local ecs_array_desc_t = ffi.typeof 'ecs_array_desc_t'
 
 local function is_entity(entity)
   return type(entity) == 'cdata' and ffi.typeof(entity) == uint64_t
+end
+
+local function ecs_entity_t_lo(value)
+  return ffi.cast(uint32_t, value)
+end
+
+local function ecs_entity_t_hi(value)
+  return ffi.rshift(ffi.cast(uint32_t, value), 32)
 end
 
 local function ecs_entity_t_comb(lo, hi)
@@ -316,6 +418,70 @@ end
 
 local function ecs_add_pair(world, subject, first, second)
   return ffi.C.ecs_add_id(world, subject, ecs_pair(first, second))
+end
+
+local function ecs_get_path(world, entity)
+  return ffi.C.ecs_get_path_w_sep(world, 0, entity, '.', nil)
+end
+
+local function ecs_has_pair(world, entity, first, second)
+  return ffi.C.ecs_has_id(world, entity, ecs_pair(first, second))
+end
+
+local function ecs_remove_pair(world, subject, first, second)
+  ffi.C.ecs_remove_id(world, subject, ecs_pair(first, second))
+end
+
+local ECS_ID_FLAGS_MASK = bit.lshift(0xFFull, 60)
+local ECS_ENTITY_MASK = 0xFFFFFFFFull
+local ECS_GENERATION_MASK = bit.lshift(0xFFFFull, 32)
+
+local function ECS_GENERATION(e)
+  return bit.rshift(bit.band(e, ECS_GENERATION_MASK), 32)
+end
+
+local function ECS_GENERATION_INC(e)
+  return bit.bor(bit.band(e, bit.bnot(ECS_GENERATION_MASK)), bit.lshift(bit.band(0xffff, ECS_GENERATION(e) + 1), 32))
+end
+
+local ECS_COMPONENT_MASK = bit.bnot(ECS_ID_FLAGS_MASK)
+
+local function ECS_HAS_ID_FLAG(e, flag)
+  return bit.band(e, flag) ~= 0
+end
+
+local function ECS_IS_PAIR(id)
+  return bit.band(id, ECS_ID_FLAGS_MASK) == ffi.C.ECS_PAIR
+end
+
+local function ECS_PAIR_FIRST(e)
+  return ecs_entity_t_hi(bit.band(e, ECS_COMPONENT_MASK))
+end
+
+local function ECS_PAIR_SECOND(e)
+  return ecs_entity_t_lo(e)
+end
+
+local function ecs_pair_first(world, pair)
+  return ffi.C.ecs_get_alive(world, ECS_PAIR_FIRST(pair))
+end
+
+local function ecs_pair_second(world, pair)
+  return ffi.C.ecs_get_alive(world, ECS_PAIR_SECOND(pair))
+end
+
+local ecs_pair_relation = ecs_pair_first
+local ecs_pair_target = ecs_pair_second
+
+local function ECS_HAS_RELATION(e, rel)
+  return ECS_HAS_ID_FLAG(e, ffi.C.ECS_PAIR) and ECS_PAIR_FIRST() ~= 0
+end
+
+local function init_scope(world, id)
+  local scope = ffi.C.ecs_get_scope(world)
+  if scope ~= 0 then
+    ecs_add_pair(world, id, ffi.C.EcsChildOf, scope)
+  end
 end
 
 ffi.metatype('ecs_world_t', {
@@ -370,12 +536,11 @@ ffi.metatype('ecs_world_t', {
     set_default_query_flags = function(self, flags)
       ffi.C.ecs_set_default_query_flags(self, flags)
     end,
-    new_entity = function(self, arg1, arg2, arg3)
+    new = function(self, arg1, arg2, arg3)
       local entity
       local name
       local components
 
-      -- TODO: Omit checks since passing the values to a C function checks them anyway??
       if not arg1 and not arg2 then
         --  entity | name(string)
         entity = ffi.C.ecs_new(self)
@@ -443,7 +608,24 @@ ffi.metatype('ecs_world_t', {
 
       return entity
     end,
-    get_name = function(self, entity)
+    delete = function(self, entity)
+      if is_entity(entity) then
+        ffi.C.ecs_delete(self, entity)
+      else
+        for i = 1, #entity do
+          ffi.C.ecs_delete(self, entity[i])
+        end
+      end
+    end,
+    new_tag = function(self, name)
+      local entity = ffi.C.ecs_lookup(self, name)
+      if entity == 0 then
+        entity = ffi.C.ecs_set_name(self, entity, name)
+      end
+
+      return entity
+    end,
+    name = function(self, entity)
       local name = ffi.C.ecs_get_name(self, entity)
       if name ~= nil then
         return ffi.string(name)
@@ -451,6 +633,228 @@ ffi.metatype('ecs_world_t', {
     end,
     set_name = function(self, entity, name)
       ffi.C.ecs_set_name(self, entity, name)
+    end,
+    symbol = function (self, entity)
+      local symbol = ffi.C.ecs_get_symbol(self, entity)
+      if symbol ~= nil then
+        return ffi.string(symbol)
+      end
+    end,
+    path = function(self, entity)
+      local path = ecs_get_path(self, entity)
+      local result = ffi.string(path)
+      ffi.C.free(path)
+      return result
+    end,
+    lookup = function(self, path)
+      return ffi.C.ecs_lookup(self, path)
+    end,
+    lookup_child = function(self, parent, name)
+      return ffi.C.ecs_lookup_child(self, parent, name)
+    end,
+    lookup_path = function(self, parent, path, sep, prefix)
+      return ffi.C.ecs_lookup_path_w_sep(self, parent, path, sep, prefix, false)
+    end,
+    lookup_symbol = function(self, symbol)
+      return ffi.C.ecs_lookup_symbol(self, symbol, true, false)
+    end,
+    set_alias = function(self, entity, name)
+      ffi.C.ecs_set_alias(self, entity, name)
+    end,
+    has = function(self, entity, arg1, arg2)
+      if entity and arg1 and arg2 then
+        return ecs_has_pair(self, entity, arg1, arg2)
+      else
+        return ffi.C.ecs_has_id(self, entity, arg1)
+      end
+    end,
+    owns = function (self, entity, id)
+      return ffi.C.ecs_owns_id(self, entity, id)
+    end,
+    is_alive = function(self, entity)
+      return ffi.C.ecs_is_alive(self, entity)
+    end,
+    is_valid = function(self, entity)
+      return ffi.C.ecs_is_valid(self, entity)
+    end,
+    alive = function(self, entity)
+      return ffi.C.ecs_get_alive(self, entity)
+    end,
+    make_alive = function(self, entity)
+      ffi.C.ecs_make_alive(self, entity)
+    end,
+    exists = function(self, entity)
+      return ffi.C.ecs_exists(self, entity)
+    end,
+    add = function(self, entity, arg1, arg2)
+      if entity and arg1 and arg2 then
+        return ecs_add_pair(self, entity, arg1, arg2)
+      else
+        return ffi.C.ecs_add_id(self, entity, arg1)
+      end
+    end,
+    remove = function(self, entity, arg1, arg2)
+      if arg1 and arg2 then
+        ecs_remove_pair(self, entity, arg1, arg2)
+      else
+        ffi.C.ecs_remove_id(self, entity, arg1)
+      end
+    end,
+    clear = function(self, entity)
+      ffi.C.ecs_clear(self, entity)
+    end,
+    enable = function(self, entity, component)
+      if component then
+        ffi.C.ecs_enable_id(self, entity, component, true)
+      else
+        ffi.C.ecs_enable(self, entity, true)
+      end
+    end,
+    disable = function(self, entity, component)
+      if component then
+        ffi.C.ecs_enable_id(self, entity, component, false)
+      else
+        ffi.C.ecs_enable(self, entity, false)
+      end
+    end,
+    count = function(self, entity)
+      return ffi.C.ecs_count_id(self, entity)
+    end,
+    delete_children = function(self, parent)
+      ffi.C.ecs_delete_with(self, ecs_pair(ffi.C.EcsChildOf, parent))
+    end,
+    parent = function(self, entity)
+      return ffi.C.ecs_get_target(self, entity, ffi.C.EcsChildOf, 0)
+    end,
+    is_component_enabled = function(self, entity, component)
+      return ffi.C.ecs_is_enabled_id(self, entity, component)
+    end,
+    pair = function(predicate, object)
+      return ecs_pair(predicate, object)
+    end,
+    is_pair = function(id)
+      return ECS_IS_PAIR(id)
+    end,
+    pair_target = function(self, pair)
+      return ecs_pair_target(self, pair)
+    end,
+    add_is_a = function(self, entity, base)
+      ecs_add_pair(self, entity, ffi.C.EcsIsA, base)
+    end,
+    remove_is_a = function(self, entity, base)
+      ecs_remove_pair(self, entity, ffi.C.EcsIsA, base)
+    end,
+    add_child_of = function(self, entity, parent)
+      ecs_add_pair(self, entity, ffi.C.EcsChildOf, parent)
+    end,
+    remove_child_of = function(self, entity, parent)
+      ecs_remove_pair(self, entity, ffi.C.EcsChildOf, parent)
+    end,
+    auto_override = function(self, entity, component)
+      ffi.C.ecs_add_id(self, entity, bit.bor(ffi.C.ECS_AUTO_OVERRIDE, component))
+    end,
+    new_enum = function(self, name, description)
+      if ffi.C.ecs_lookup(self, name) ~= 0 then
+        error('Component already exists.', 2)
+      end
+
+      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      ffi.C.ecs_set_name(self, component, name)
+      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsEnumType, description) ~= 0 then
+        error('Invalid descriptor.', 2)
+      end
+
+      init_scope(self, component)
+      return component
+    end,
+    new_bitmask = function(self, name, description)
+      if ffi.C.ecs_lookup(self, name) ~= 0 then
+        error('Component already exists.', 2)
+      end
+
+      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      ffi.C.ecs_set_name(self, component, name)
+      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsBitmaskType, description) ~= 0 then
+        error('Invalid descriptor.', 2)
+      end
+
+      init_scope(self, component)
+      return component
+    end,
+    new_array = function (self, name, element, count)
+      if count < 0 or count > 0x7fffffff then
+        error(string.format('Element count out of range (%f)', count), 2)
+      end
+
+      if ffi.C.ecs_lookup(self, name) ~= 0 then
+        error('Component already exists.', 2)
+      end
+
+      local component = ffi.C.ecs_array_init(self, ecs_array_desc_t({ type = element, count = count }))
+      ffi.C.ecs_set_name(self, component, name)
+
+      init_scope(self, component)
+      return component
+    end,
+    new_struct = function(self, name, description)
+      if ffi.C.ecs_lookup(self, name) ~= 0 then
+        error('Component already exists.', 2)
+      end
+
+      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      ffi.C.ecs_set_name(self, component, name)
+      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsStructType, description) ~= 0 then
+        error('Invalid descriptor.', 2)
+      end
+
+      ffi.C.ecs_set_id(self, component, ffi.C.FLECS_IDEcsTypeID_, ffi.sizeof(EcsType), EcsType({ kind = ffi.C.EcsStructType }))
+
+      init_scope(self, component)
+      return component
+    end,
+    new_alias = function(self, name, alias)
+      local type_entity = ffi.C.ecs_lookup(self, name)
+      if type_entity == 0 then
+        error('Component does not exist.', 2)
+      end
+
+      if not ffi.C.ecs_has_id(self, type_entity, ffi.C.FLECS_IDEcsComponentID_) then
+        error('Not a component,', 2)
+      end
+
+      if ffi.C.ecs_get_id(self, type_entity, ffi.C.FLECS_IDEcsTypeID_) == nil then
+        error('Missing descriptor.', 2)
+      end
+
+      if ffi.C.ecs_lookup(self, alias) ~= 0 then
+        error('Alias already exists.', 2)
+      end
+
+      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      ffi.C.ecs_set_name(self, component, alias)
+      -- TODO: Should we copy components?
+
+      init_scope(self, component)
+      return component
+    end,
+    new_prefab = function(self, id, expression)
+      local entity
+      if not id then
+        entity = ffi.C.ecs_new(self)
+        local scope = ffi.C.ecs_get_scope(self)
+        if scope ~= 0 then
+          ecs_add_pair(self, entity, ffi.C.EcsChildOf, scope)
+        end
+        ffi.C.ecs_add_id(self, entity, ffi.C.EcsPrefab)
+      else
+        entity = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({
+          name = id,
+          add_expr = expression,
+          add = uint64_t_vla(2, { ffi.C.EcsPrefab, 0 }),
+        }))
+      end
+
+      return entity
     end,
   },
   __metatable = nil,

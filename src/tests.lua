@@ -16,37 +16,84 @@ local entities = world:get_entities()
 local alive = #entities.alive
 local dead = #entities.dead
 
-print(alive, 'alive')
-print(dead, 'dead')
+assert(alive > 0, 'Got unexpected alive entity count ' .. alive)
+assert(dead == 0, 'Got unexpected dead entity count ' .. dead)
 
-local entity = world:new_entity()
+local entity = world:new()
 local new_alive = #world:get_entities().alive
-assert(new_alive == alive + 1)
-assert(not world:get_name(entity))
-print("Created a new, empty entity. Now there's " .. new_alive .. ' alive entities.')
+assert(new_alive == alive + 1, 'Unexpected alive entity count.')
+assert(not world:name(entity), 'Unexpectedly got a name for an empty entity.')
 
 world:set_name(entity, 'First Test Entity')
-print('The new entity now has name: "' .. world:get_name(entity) .. '"')
 
-local success, error = pcall(function() entity = world:new_entity(entity, 'First Test Entity') end)
-assert(not success)
-print('Tried to make a new entity with the same ID and the same name. Task failed successfully with message: ' .. error)
+local success = pcall(function() entity = world:new(entity, 'First Test Entity') end)
+assert(not success, 'Attempt to make a new entity with the same ID and the same name succeeded.')
 
-assert(world:new_entity(entity, 'First Test Entity New Name') == entity)
-assert(world:get_name(entity) ~= 'First Test Entity New Name')
-print('Attempted to make a new entity with the same ID but a different name. Nothing was effectively done successfully.')
+assert(
+  world:new(entity, 'First Test Entity New Name') == entity,
+  'The ID returned by world:new() when passed an existing entity is different from the ID passed.'
+)
+assert(
+  world:name(entity) ~= 'First Test Entity New Name',
+  'Attempt to make a new entity with the same ID but a different name changed its name.'
+)
 
-local malicious_table = setmetatable({}, {
+local table_with_tostring = setmetatable({}, {
   __tostring = function ()
-    return 'A malicious name!'
+    return 'Table with __tostring()'
   end
 })
-print('A malicious table has a __tostring() method that returns: "' .. tostring(malicious_table) .. '"')
 
-success, error = pcall(function()
-  world:set_name(entity, malicious_table)
+success = pcall(function()
+  world:set_name(entity, table_with_tostring)
 end)
-assert(not success)
-print("Attempt to set an entity's name by passing said table failed successfully with message: " .. error)
+assert(
+  not success,
+  "Attempt to set an entity's name by passing a table with a __tostring() metamethod succeeded."
+)
 
-assert(new_alive == alive + 1)
+assert(new_alive == alive + 1, 'The alive entity count changed unexpectedly.')
+
+assert(world:lookup 'First Test Entity' == entity, 'world:lookup() failed for entity.')
+
+world:delete(entity)
+new_alive = #world:get_entities().alive
+assert(new_alive == alive, 'world:delete() failed.')
+
+local tag = world:new_tag 'tagname'
+assert(tag ~= 0, 'Failed to create tag.')
+assert(world:new_tag 'tagname' == tag, 'Creating a tag with an existing tag name returned a different ID.')
+assert(world:name(tag) == 'tagname', 'Got an unexpected name from the tag.')
+
+assert(world:lookup 'tagname' == tag, 'world:lookup() failed for tag.')
+
+assert(world:new_enum('New Enum', '{ Element1, Element2, Element3 }') ~= 0, 'Failed to create enum.')
+assert(
+  world:new_bitmask('New Bitmask', '{ Element1 = 1, Element2 = 2, Element3 = 3 }') ~= 0,
+  'Failed to create bitmask.'
+)
+assert(world:new_array('New Array', world:lookup_symbol('i32'), 100), 'Failed to create array.')
+
+local translation = world:new_struct('Translation', '{ double x; double y; double z; }')
+assert(translation ~= 0, 'Failed to create struct.')
+
+assert(not pcall(function() world:new_alias() end), 'Calling new_alias() without parameters succeeded.')
+assert(
+  not pcall(function() world:new_alias('non-existent component', 'SomeAlias') end),
+  'Calling new_alias() with non-existent component succeeded.'
+)
+world:new('NotAComponent')
+assert(
+  not pcall(function() world:new_alias('NotAComponent', 'SomeAlias') end),
+  'Calling new_alias() with a non-component succeeded.'
+)
+world:new_alias('Translation', 'Position')
+assert(
+  not pcall(function() world:new_alias('Translation', 'Position') end),
+  'Calling new_alias() with an existing alias succeeded.'
+)
+
+world:new_prefab()
+world:new_prefab('Base Entity', 'Translation')
+
+print('All tests passed successfully!')

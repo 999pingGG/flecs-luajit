@@ -1,7 +1,7 @@
 # flecs-luajit
 [![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
 
-Single-file and pure Lua bindings for [Flecs](https://github.com/SanderMertens/flecs/) using the LuaJIT FFI.
+**WIP** single-file and pure Lua bindings for [Flecs](https://github.com/SanderMertens/flecs/) using the LuaJIT FFI. The aim is to implement at least all the basic Flecs' features that allows making a game. Unsafer operations are not implemented yet. Based on [https://github.com/flecs-hub/flecs-lua/]()
 
 ## How to build and run
 
@@ -16,3 +16,7 @@ At the Lua side, you only need `ecs.lua`, the standard Lua libraries and the sta
 ## Configuration
 
 Before `require`'ing the library, you can set the globals `ecs_ftime_t` and `ecs_float_t` to any string representing a C type matching any custom `#define`s you might have provided to Flecs; for example, `#define ecs_ftime_t double`. They must match in Lua and in C! They are both `float` by default, just like Flecs' defaults.
+
+### Caveats
+
+This library uses `ffi.C.free()` to release the memory allocated and returned by Flecs, so don't pass custom memory management functions to Flecs (for example, by using `ecs_os_set_api()`)! This unsafe operation is not yet implemented.
