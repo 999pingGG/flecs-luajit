@@ -515,7 +515,7 @@ ffi.metatype('ecs_world_t', {
         table.insert(alive, entities.ids[i])
       end
 
-      for i = entities.alive_count + 1, entities.count - 1 do
+      for i = entities.alive_count, entities.count - 1 do
         table.insert(dead, entities.ids[i])
       end
 
