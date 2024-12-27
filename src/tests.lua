@@ -2,7 +2,7 @@ local ecs = require 'ecs'
 
 local world = ecs.init()
 
-print('Hello, world:', world)
+print('Hello, ' .. tostring(world))
 
 print(world:info())
 print(world:stats())
@@ -95,5 +95,20 @@ assert(
 
 world:new_prefab()
 world:new_prefab('Base Entity', 'Translation')
+
+entity = world:new()
+world:set(entity, translation, { 1, 2, 3 })
+local t = world:get(entity, translation)
+assert(t.x == 1 and t.y == 2 and t.z == 3, 'Setting a component failed.')
+
+t.x = 999
+assert(t.x == 999, 'A component copy assignment failed.')
+t = world:get(entity, translation)
+assert(t ~= 999, 'world:get() should not return a reference to the component, but a copy of it.')
+
+t.y = 117
+world:set(entity, translation, t)
+t = world:get(entity, translation)
+assert(t.x == 1 and t.y == 117 and t.z == 3, 'Setting a component failed.')
 
 print('All tests passed successfully!')
