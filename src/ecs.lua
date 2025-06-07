@@ -418,7 +418,7 @@ local function ecs_pair(pred, obj)
 end
 
 local function ecs_add_pair(world, subject, first, second)
-  return ffi.C.ecs_add_id(world, subject, ecs_pair(first, second))
+  ffi.C.ecs_add_id(world, subject, ecs_pair(first, second))
 end
 
 local function ecs_get_path(world, entity)
@@ -571,7 +571,7 @@ ffi.metatype('ecs_world_t', {
       if entity and name and ffi.C.ecs_is_alive(self, entity) then
         local existing = ffi.C.ecs_get_name(self, entity)
         if existing ~= nil then
-          if ffi.string(existing) ~= name then
+          if ffi.string(existing) == name then
             return entity
           end
 
@@ -609,7 +609,7 @@ ffi.metatype('ecs_world_t', {
         ffi.C.ecs_set_name(self, entity, name)
       end
 
-      return entity
+      return entity ~= 0 and entity or nil
     end,
     delete = function (self, entity)
       if is_entity(entity) then
@@ -626,7 +626,7 @@ ffi.metatype('ecs_world_t', {
         entity = ffi.C.ecs_set_name(self, entity, name)
       end
 
-      return entity
+      return entity ~= 0 and entity or nil
     end,
     name = function (self, entity)
       local name = ffi.C.ecs_get_name(self, entity)
@@ -645,21 +645,25 @@ ffi.metatype('ecs_world_t', {
     end,
     path = function (self, entity)
       local path = ecs_get_path(self, entity)
-      local result = ffi.string(path)
+      local ret = ffi.string(path)
       ffi.C.free(path)
-      return result
+      return ret
     end,
     lookup = function (self, path)
-      return ffi.C.ecs_lookup(self, path)
+      local ret = ffi.C.ecs_lookup(self, path)
+      return ret ~= 0 and ret or nil
     end,
     lookup_child = function (self, parent, name)
-      return ffi.C.ecs_lookup_child(self, parent, name)
+      local ret = ffi.C.ecs_lookup_child(self, parent, name)
+      return ret ~= 0 and ret or nil
     end,
     lookup_path = function (self, parent, path, sep, prefix)
-      return ffi.C.ecs_lookup_path_w_sep(self, parent, path, sep, prefix, false)
+      local ret = ffi.C.ecs_lookup_path_w_sep(self, parent, path, sep, prefix, false)
+      return ret ~= 0 and ret or nil
     end,
     lookup_symbol = function (self, symbol)
-      return ffi.C.ecs_lookup_symbol(self, symbol, true, false)
+      local ret = ffi.C.ecs_lookup_symbol(self, symbol, true, false)
+      return ret ~= 0 and ret or nil
     end,
     set_alias = function (self, entity, name)
       ffi.C.ecs_set_alias(self, entity, name)
@@ -681,7 +685,8 @@ ffi.metatype('ecs_world_t', {
       return ffi.C.ecs_is_valid(self, entity)
     end,
     alive = function (self, entity)
-      return ffi.C.ecs_get_alive(self, entity)
+      local ret = ffi.C.ecs_get_alive(self, entity)
+      return ret
     end,
     make_alive = function (self, entity)
       ffi.C.ecs_make_alive(self, entity)
@@ -691,9 +696,9 @@ ffi.metatype('ecs_world_t', {
     end,
     add = function (self, entity, arg1, arg2)
       if entity and arg1 and arg2 then
-        return ecs_add_pair(self, entity, arg1, arg2)
+        ecs_add_pair(self, entity, arg1, arg2)
       else
-        return ffi.C.ecs_add_id(self, entity, arg1)
+        ffi.C.ecs_add_id(self, entity, arg1)
       end
     end,
     remove = function (self, entity, arg1, arg2)
@@ -727,7 +732,8 @@ ffi.metatype('ecs_world_t', {
       ffi.C.ecs_delete_with(self, ecs_pair(ffi.C.EcsChildOf, parent))
     end,
     parent = function (self, entity)
-      return ffi.C.ecs_get_target(self, entity, ffi.C.EcsChildOf, 0)
+      local ret = ffi.C.ecs_get_target(self, entity, ffi.C.EcsChildOf, 0)
+      return ret
     end,
     is_component_enabled = function (self, entity, component)
       return ffi.C.ecs_is_enabled_id(self, entity, component)
@@ -762,6 +768,9 @@ ffi.metatype('ecs_world_t', {
       end
 
       local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      if component == 0 then
+        return
+      end
       ffi.C.ecs_set_name(self, component, name)
       if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsEnumType, description) ~= 0 then
         error('Invalid descriptor.', 2)
@@ -776,6 +785,9 @@ ffi.metatype('ecs_world_t', {
       end
 
       local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      if component == 0 then
+        return
+      end
       ffi.C.ecs_set_name(self, component, name)
       if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsBitmaskType, description) ~= 0 then
         error('Invalid descriptor.', 2)
@@ -794,6 +806,9 @@ ffi.metatype('ecs_world_t', {
       end
 
       local component = ffi.C.ecs_array_init(self, ecs_array_desc_t({ type = element, count = count }))
+      if component == 0 then
+        return
+      end
       ffi.C.ecs_set_name(self, component, name)
 
       init_scope(self, component)
@@ -805,6 +820,9 @@ ffi.metatype('ecs_world_t', {
       end
 
       local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      if component == 0 then
+        return
+      end
       ffi.C.ecs_set_name(self, component, name)
       if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsStructType, description) ~= 0 then
         error('Invalid descriptor.', 2)
@@ -844,6 +862,9 @@ ffi.metatype('ecs_world_t', {
       end
 
       local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      if component == 0 then
+        return
+      end
       ffi.C.ecs_set_name(self, component, alias)
       -- TODO: Should we copy components?
 
@@ -867,7 +888,7 @@ ffi.metatype('ecs_world_t', {
         }))
       end
 
-      return entity
+      return entity ~= 0 and entity or nil
     end,
     get = function (self, entity, component)
       local data = ffi.C.ecs_get_id(self, entity, component)
@@ -888,11 +909,7 @@ ffi.metatype('ecs_world_t', {
         error('Component does not exist or it lacks serialization data.', 2)
       end
 
-      if type(value) == 'table' then
-        ffi.C.ecs_set_id(self, entity, component, ctypes.size, ctypes.struct(value))
-      else
-        ffi.C.ecs_set_id(self, entity, component, ctypes.size, value)
-      end
+      ffi.C.ecs_set_id(self, entity, component, ctypes.size, type(value) == 'table' and ctypes.struct(value) or value)
     end,
   },
   __tostring = function (self)

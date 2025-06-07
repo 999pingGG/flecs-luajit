@@ -27,16 +27,10 @@ assert(not world:name(entity), 'Unexpectedly got a name for an empty entity.')
 world:set_name(entity, 'First Test Entity')
 
 local success = pcall(function() entity = world:new(entity, 'First Test Entity') end)
-assert(not success, 'Attempt to make a new entity with the same ID and the same name succeeded.')
+assert(success, 'Attempt to make a new entity with the same ID and same name failed.')
 
-assert(
-  world:new(entity, 'First Test Entity New Name') == entity,
-  'The ID returned by world:new() when passed an existing entity is different from the ID passed.'
-)
-assert(
-  world:name(entity) ~= 'First Test Entity New Name',
-  'Attempt to make a new entity with the same ID but a different name changed its name.'
-)
+local success = pcall(function() world:new(entity, 'First Test Entity New Name') end)
+assert(not success, 'Calling world:new() with an existing entity ID but different name succeeded.')
 
 local table_with_tostring = setmetatable({}, {
   __tostring = function ()
@@ -61,21 +55,21 @@ new_alive = #world:get_entities().alive
 assert(new_alive == alive, 'world:delete() failed.')
 
 local tag = world:new_tag 'tagname'
-assert(tag ~= 0, 'Failed to create tag.')
+assert(tag, 'Failed to create tag.')
 assert(world:new_tag 'tagname' == tag, 'Creating a tag with an existing tag name returned a different ID.')
 assert(world:name(tag) == 'tagname', 'Got an unexpected name from the tag.')
 
 assert(world:lookup 'tagname' == tag, 'world:lookup() failed for tag.')
 
-assert(world:new_enum('New Enum', '{ Element1, Element2, Element3 }') ~= 0, 'Failed to create enum.')
+assert(world:new_enum('New Enum', '{ Element1, Element2, Element3 }'), 'Failed to create enum.')
 assert(
-  world:new_bitmask('New Bitmask', '{ Element1 = 1, Element2 = 2, Element3 = 3 }') ~= 0,
+  world:new_bitmask('New Bitmask', '{ Element1 = 1, Element2 = 2, Element3 = 3 }'),
   'Failed to create bitmask.'
 )
 assert(world:new_array('New Array', world:lookup_symbol('i32'), 100), 'Failed to create array.')
 
 local translation = world:new_struct('Translation', '{ double x; double y; double z; }')
-assert(translation ~= 0, 'Failed to create struct.')
+assert(translation, 'Failed to create struct.')
 
 assert(not pcall(function() world:new_alias() end), 'Calling new_alias() without parameters succeeded.')
 assert(
