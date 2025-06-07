@@ -52,7 +52,6 @@ typedef struct ecs_world_info_t {
   int32_t component_id_count;
   int32_t pair_id_count;
   int32_t table_count;
-  int32_t empty_table_count;
   struct {
     int64_t add_count;
     int64_t remove_count;
@@ -965,8 +964,6 @@ ffi.metatype(ecs_world_info_t, {
     buf:put(self.pair_id_count)
     buf:put '\nTable count: '
     buf:put(self.table_count)
-    buf:put '\nEmpty table count: '
-    buf:put(self.empty_table_count)
     buf:put '\nCommand add count: '
     buf:put(self.cmd.add_count)
     buf:put '\nCommand remove count: '
