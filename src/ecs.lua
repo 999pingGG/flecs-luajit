@@ -485,7 +485,8 @@ local function init_scope(world, id)
   end
 end
 
-local component_ctypes = {}
+local world_sequence = 0
+local worlds = {}
 
 ffi.metatype('ecs_world_t', {
   __index = {
@@ -831,14 +832,17 @@ ffi.metatype('ecs_world_t', {
       ffi.C.ecs_set_id(self, component, ffi.C.FLECS_IDEcsTypeID_, ffi.sizeof(EcsType), EcsType({ kind = ffi.C.EcsStructType }))
 
       local path = ffi.C.ecs_get_path_w_sep(self, 0, component, '_', nil)
-      local c_identifier = ffi.string(path)
+      local c_identifier = ffi.string(path) .. '_' .. worlds[self].consecutive
       ffi.C.free(path)
 
       ffi.cdef('typedef struct ' .. c_identifier .. description .. c_identifier)
-      component_ctypes[component] = { struct = ffi.typeof(c_identifier) }
-      component_ctypes[component].ptr = ffi.typeof(c_identifier .. '*')
-      component_ctypes[component].const_ptr = ffi.typeof('const ' .. c_identifier .. '*')
-      component_ctypes[component].size = ffi.sizeof(c_identifier)
+      local component_ctypes = worlds[self].component_ctypes
+      component_ctypes[component] = {
+        struct = ffi.typeof(c_identifier),
+        ptr = ffi.typeof(c_identifier .. '*'),
+        const_ptr = ffi.typeof('const ' .. c_identifier .. '*'),
+        size = ffi.sizeof(c_identifier),
+      }
 
       init_scope(self, component)
       return component
@@ -896,20 +900,20 @@ ffi.metatype('ecs_world_t', {
         return
       end
 
-      local ctypes = component_ctypes[component]
-      if not ctypes then
+      local ctype = worlds[self].component_ctypes[component]
+      if not ctype then
         error('Component does not exist or it lacks serialization data.', 2)
       end
 
-      return ctypes.struct(ffi.cast(ctypes.const_ptr, data)[0])
+      return ctype.struct(ffi.cast(ctype.const_ptr, data)[0])
     end,
     set = function (self, entity, component, value)
-      local ctypes = component_ctypes[component]
-      if not ctypes then
+      local ctype = worlds[self].component_ctypes[component]
+      if not ctype then
         error('Component does not exist or it lacks serialization data.', 2)
       end
 
-      ffi.C.ecs_set_id(self, entity, component, ctypes.size, type(value) == 'table' and ctypes.struct(value) or value)
+      ffi.C.ecs_set_id(self, entity, component, ctype.size, type(value) == 'table' and ctype.struct(value) or value)
     end,
   },
   __tostring = function (self)
@@ -1153,14 +1157,28 @@ ffi.metatype(ecs_metric_t, {
   __metatable = nil,
 })
 
+local function register_world(world)
+  worlds[world] = {
+    component_ctypes = {},
+    consecutive = world_sequence,
+  }
+  world_sequence = world_sequence + 1
+  return world
+end
+
+local function finish_world(world)
+  worlds[world] = nil
+  ffi.C.ecs_fini(world)
+end
+
 local ret = {}
 
 function ret.init()
-  return ffi.gc(ffi.C.ecs_init(), ffi.C.ecs_fini)
+  return ffi.gc(register_world(ffi.C.ecs_init()), finish_world)
 end
 
 function ret.mini()
-  return ffi.gc(ffi.C.ecs_mini(), ffi.C.ecs_fini)
+  return ffi.gc(register_world(ffi.C.ecs_mini()), finish_world)
 end
 
 return ret

@@ -105,4 +105,12 @@ world:set(entity, translation, t)
 t = world:get(entity, translation)
 assert(t.x == 1 and t.y == 117 and t.z == 3, 'Setting a component failed.')
 
+local world2 = ecs.init()
+
+assert(not world2:lookup 'New Enum', 'An enum from some world exists in another one.')
+assert(not world2:lookup 'Translation', 'A struct from some world exists in another one.')
+
+local translation2d = world2:new_struct('Translation', '{ float x; float y; }')
+assert(translation2d, 'Failed to create struct with the same name in another world.')
+
 print('All tests passed successfully!')
