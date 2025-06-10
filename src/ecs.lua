@@ -485,7 +485,77 @@ local function init_scope(world, id)
   end
 end
 
-local world_sequence = 0
+local forbidden_struct_patterns = {
+  { pattern = '%*', error_message = 'No pointers allowed.' },
+  { pattern = '[%[%]]', error_message = 'No arrays allowed.' },
+  { pattern = '%f[%w_]uptr%f[^%w_]', error_message = 'No pointers allowed.' },
+  { pattern = '%f[%w_]iptr%f[^%w_]', error_message = 'No pointers allowed.' },
+  { pattern = '%f[%w_]string%f[^%w_]', error_message = 'No strings allowed (yet?).' },
+}
+
+local c_type_map = {
+  byte = 'unsigned char',
+  u8 = 'uint8_t',
+  u16 = 'uint16_t',
+  u32 = 'uint32_t',
+  u64 = 'uint64_t',
+  i8 = 'int8_t',
+  i16 = 'int16_t',
+  i32 = 'int32_t',
+  i64 = 'int64_t',
+  f32 = 'float',
+  f64 = 'double',
+}
+
+local flecs_type_map = {
+  uint8_t = 'u8',
+  uint16_t = 'u16',
+  uint32_t = 'u32',
+  uint64_t = 'u64',
+  int8_t = 'i8',
+  int16_t = 'i16',
+  int32_t = 'i32',
+  int64_t = 'i64',
+  float = 'f32',
+  double = 'f64',
+  int = 'i32',
+  float = 'f32',
+  double = 'f64',
+}
+
+local function check_c_identifier(identifier)
+  if not identifier:match '^%a[%a_%d]*$' then
+    error('Not a valid C identifier: "' .. identifier .. '"', 3)
+  end
+end
+
+local function filter_unsafe_constructs(s)
+  for i = 1, #forbidden_struct_patterns do
+    local pattern = forbidden_struct_patterns[i]
+    if s:match(pattern.pattern) then
+      error(pattern.error_message, 4)
+    end
+  end
+end
+
+local function substitute_types(input, type_map)
+  -- Replace types only when they are full words (surrounded by non-word boundaries).
+  return input:gsub("(%f[%w_])(%a[%w_]*)(%f[^%w_])", function(prefix, word, suffix)
+    local replacement = type_map[word] or word
+    return prefix .. replacement .. suffix
+  end)
+end
+
+local function generate_definitions(description)
+  filter_unsafe_constructs(description)
+
+  local flecs_definition = substitute_types(description, flecs_type_map)
+  local c_definition = substitute_types(description, c_type_map)
+
+  return flecs_definition, c_definition
+end
+
+local c_identifier_sequence = 0
 local worlds = {}
 
 ffi.metatype('ecs_world_t', {
@@ -629,10 +699,12 @@ ffi.metatype('ecs_world_t', {
 
       return entity ~= 0 and entity or nil
     end,
-    name = function (self, entity)
+    name = function (self, entity, numeric_name)
       local name = ffi.C.ecs_get_name(self, entity)
       if name ~= nil then
         return ffi.string(name)
+      elseif numeric_name and self:is_alive(entity) then
+        return '#' .. tostring(entity)
       end
     end,
     set_name = function (self, entity, name)
@@ -816,28 +888,44 @@ ffi.metatype('ecs_world_t', {
       return component
     end,
     new_struct = function (self, name, description)
+      check_c_identifier(name)
+
       if ffi.C.ecs_lookup(self, name) ~= 0 then
         error('Component already exists.', 2)
       end
+
+      local flecs_definition, c_definition = generate_definitions(description)
 
       local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
       if component == 0 then
         return
       end
       ffi.C.ecs_set_name(self, component, name)
-      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsStructType, description) ~= 0 then
+      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsStructType, flecs_definition) ~= 0 then
         error('Invalid descriptor.', 2)
       end
 
       ffi.C.ecs_set_id(self, component, ffi.C.FLECS_IDEcsTypeID_, ffi.sizeof(EcsType), EcsType({ kind = ffi.C.EcsStructType }))
 
       local path = ffi.C.ecs_get_path_w_sep(self, 0, component, '_', nil)
-      local c_identifier = ffi.string(path) .. '_' .. worlds[self].consecutive
+      local c_identifier = ffi.string(path) .. '_' .. c_identifier_sequence
+      c_identifier_sequence = c_identifier_sequence + 1
       ffi.C.free(path)
 
-      ffi.cdef('typedef struct ' .. c_identifier .. description .. c_identifier)
+      local success, error_message = pcall(function()
+        ffi.cdef('typedef struct ' .. c_identifier .. c_definition .. c_identifier)
+      end)
+      if not success then
+        ffi.C.ecs_delete(self, component)
+        error(error_message, 2)
+      end
       local component_ctypes = worlds[self].component_ctypes
-      component_ctypes[component] = {
+      -- In LuaJIT, uint64_t is boxed in a cdata object. And every time you make a new uint64_t by any means,
+      -- you get a different cdata object, which counts as a different table index!
+      -- Therefore, the quick, easy and correct workaround is to convert the component ID to string
+      -- and use that instead.
+      -- https://luajit.org/ext_ffi_semantics.html#cdata_key
+      component_ctypes[tostring(component)] = {
         struct = ffi.typeof(c_identifier),
         ptr = ffi.typeof(c_identifier .. '*'),
         const_ptr = ffi.typeof('const ' .. c_identifier .. '*'),
@@ -894,26 +982,42 @@ ffi.metatype('ecs_world_t', {
 
       return entity ~= 0 and entity or nil
     end,
+    -- For safety, this function always returns a new struct initialized with the component's value.
+    -- Client code should have no access to pointers, references, or arrays.
+    -- And, since we're returning a copy here, there's no need for a get_mut function.
     get = function (self, entity, component)
       local data = ffi.C.ecs_get_id(self, entity, component)
       if data == nil then
         return
       end
 
-      local ctype = worlds[self].component_ctypes[component]
+      local ctype = worlds[self].component_ctypes[tostring(component)]
       if not ctype then
-        error('Component does not exist or it lacks serialization data.', 2)
+        error('Component ' .. self:name(component, true) .. " does not exist or it's missing serialization data.", 2)
       end
 
       return ctype.struct(ffi.cast(ctype.const_ptr, data)[0])
     end,
+    -- TODO: Get ref.
     set = function (self, entity, component, value)
-      local ctype = worlds[self].component_ctypes[component]
+      local ctype = worlds[self].component_ctypes[tostring(component)]
       if not ctype then
-        error('Component does not exist or it lacks serialization data.', 2)
+        error('Component ' .. self:name(component, true) .. " does not exist or it's missing serialization data.", 2)
       end
 
       ffi.C.ecs_set_id(self, entity, component, ctype.size, type(value) == 'table' and ctype.struct(value) or value)
+    end,
+    singleton_add = function (self, component)
+      self:add(component, component)
+    end,
+    singleton_remove = function (self, component)
+      self:remove(component, component)
+    end,
+    singleton_get = function (self, component)
+      return self:get(component, component)
+    end,
+    singleton_set = function (self, component)
+      self:set(component, component)
     end,
   },
   __tostring = function (self)
@@ -1160,9 +1264,7 @@ ffi.metatype(ecs_metric_t, {
 local function register_world(world)
   worlds[world] = {
     component_ctypes = {},
-    consecutive = world_sequence,
   }
-  world_sequence = world_sequence + 1
   return world
 end
 
