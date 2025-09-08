@@ -1000,6 +1000,9 @@ ffi.metatype('ecs_world_t', {
     end,
     -- TODO: Get ref.
     set = function (self, entity, component, value)
+      if not value then
+        error('Value must not be nil', 2)
+      end
       local ctype = worlds[self].component_ctypes[tostring(component)]
       if not ctype then
         error('Component ' .. self:name(component, true) .. " does not exist or it's missing serialization data.", 2)
@@ -1016,8 +1019,11 @@ ffi.metatype('ecs_world_t', {
     singleton_get = function (self, component)
       return self:get(component, component)
     end,
-    singleton_set = function (self, component)
-      self:set(component, component)
+    singleton_set = function (self, component, value)
+      if not value then
+        error('Value must not be nil', 2)
+      end
+      self:set(component, component, value)
     end,
   },
   __tostring = function (self)

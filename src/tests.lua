@@ -4,13 +4,17 @@ local world = ecs.init()
 
 print('Hello, ' .. tostring(world))
 
+print 'World info'
 print(world:info())
+
+print 'World stats'
 print(world:stats())
 
 world:dim(999)
 
 local res = pcall(function() world:dim() end)
 assert(not res)
+print 'World:dim() success'
 
 local entities = world:get_entities()
 local alive = #entities.alive
@@ -23,6 +27,7 @@ local entity = world:new()
 local new_alive = #world:get_entities().alive
 assert(new_alive == alive + 1, 'Unexpected alive entity count.')
 assert(not world:name(entity), 'Unexpectedly got a name for an empty entity.')
+print 'World:get_entities() success'
 
 world:set_name(entity, 'First Test Entity')
 
@@ -31,6 +36,8 @@ assert(success, 'Attempt to make a new entity with the same ID and same name fai
 
 local success = pcall(function() world:new(entity, 'First Test Entity New Name') end)
 assert(not success, 'Calling world:new() with an existing entity ID but different name succeeded.')
+
+print 'World:new() success'
 
 local table_with_tostring = setmetatable({}, {
   __tostring = function ()
@@ -43,14 +50,17 @@ assert(
   not success,
   "Attempt to set an entity's name by passing a table with a __tostring() metamethod succeeded."
 )
+print 'Tricking world:set_name() failed successfully'
 
 assert(new_alive == alive + 1, 'The alive entity count changed unexpectedly.')
 
 assert(world:lookup 'First Test Entity' == entity, 'world:lookup() failed for entity.')
+print 'World:lookup() success'
 
 world:delete(entity)
 new_alive = #world:get_entities().alive
 assert(new_alive == alive, 'world:delete() failed.')
+print 'World:delete() success'
 
 local tag = world:new_tag 'tagname'
 assert(tag, 'Failed to create tag.')
@@ -59,15 +69,23 @@ assert(world:name(tag) == 'tagname', 'Got an unexpected name from the tag.')
 
 assert(world:lookup 'tagname' == tag, 'world:lookup() failed for tag.')
 
+print 'World:new_tag() success'
+
 assert(world:new_enum('New Enum', '{ Element1, Element2, Element3 }'), 'Failed to create enum.')
+print 'World:new_enum() success'
+
 assert(
   world:new_bitmask('New Bitmask', '{ Element1 = 1, Element2 = 2, Element3 = 3 }'),
   'Failed to create bitmask.'
 )
+print 'World:new_bitmask() success'
+
 assert(world:new_array('New Array', world:lookup_symbol('i32'), 100), 'Failed to create array.')
+print 'World:new_array() success'
 
 local translation = world:new_struct('Translation', '{ double x; double y; double z; }')
 assert(translation, 'Failed to create struct.')
+print 'World:new_struct() success'
 
 assert(not pcall(function() world:new_alias() end), 'Calling new_alias() without parameters succeeded.')
 success = pcall(function() world:new_alias('non-existent component', 'SomeAlias') end)
@@ -81,13 +99,19 @@ world:new_alias('Translation', 'Position')
 success = pcall(function() world:new_alias('Translation', 'Position') end)
 assert(not success, 'Calling new_alias() with an existing alias succeeded.')
 
+print 'World:new_alias() success'
+
 world:new_prefab()
 world:new_prefab('Base Entity', 'Translation')
+
+print 'World:new_prefab() success'
 
 entity = world:new()
 world:set(entity, translation, { 1, 2, 3 })
 local t = world:get(entity, translation)
 assert(t.x == 1 and t.y == 2 and t.z == 3, 'Setting a component failed.')
+
+print 'World:set() success'
 
 t.x = 999
 assert(t.x == 999, 'A component copy assignment failed.')
@@ -98,6 +122,8 @@ t.y = 117
 world:set(entity, translation, t)
 t = world:get(entity, translation)
 assert(t.x == 1 and t.y == 117 and t.z == 3, 'Setting a component failed.')
+
+print 'World:get() success'
 
 local world2 = ecs.init()
 
@@ -110,6 +136,8 @@ assert(translation2d, 'Failed to create struct with the same name in another wor
 local configuration = world2:new_struct('Configuration', '{ int fps_cap; float max_players; }')
 world2:singleton_add(configuration)
 assert(world2:has(configuration, configuration), "Singleton wasn't added to second world.")
+
+print 'World:singleton_add() success'
 
 success = pcall(function() world2:new_struct('Pointers', '{ char* CanIHazPointers; }') end)
 assert(not success, 'Creating a struct with pointer succeeded.')
@@ -135,6 +163,8 @@ assert(
   math.abs(value.foo - 123.456) < 0.00001 and value.bar == 12,
   'Got back incorrect component values: ' .. value.foo .. ', ' .. value.bar
 )
+
+print 'Misc tests with a second world succeeded.'
 
 local monster_component = world:new_struct('MonsterComponent', [[{
   bool bool_field;
@@ -166,7 +196,7 @@ world:singleton_get(monster_component)
 world:singleton_remove(monster_component)
 world:singleton_set(monster_component, {
   bool_field = true,
-  char_field = 'a',
+  char_field = 97, -- ASCII for "a". You have to specify chars as integers instead of strings.
   byte_field = 1,
   u8_field = 2,
   u8_field2 = 3,
@@ -188,5 +218,7 @@ world:singleton_set(monster_component, {
   float_field = 11.11,
   double_field = 22.22,
 })
+
+print 'Tests with a monster component succeeded.'
 
 print('All tests passed successfully!')
