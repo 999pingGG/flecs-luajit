@@ -1036,8 +1036,7 @@ ffi.metatype(ecs_world_info_t, {
   __tostring = function (self)
     local buf = buffer.new()
 
-    buf:put 'World information:'
-    buf:put '\nLast component id: '
+    buf:put 'Last component id: '
     buf:put(self.last_component_id)
     buf:put '\nMin id: '
     buf:put(self.min_id)
@@ -1135,128 +1134,128 @@ ffi.metatype(ecs_world_stats_t, {
   __tostring = function (self)
     local buf = buffer.new()
 
-    buf:put '\nEntities count:'
-    buf:put(self.entities.count)
+    buf:put 'Entities count:'
+    buf:put(self.entities.count.counter.value[self.t])
     buf:put '\nEntities not alive count:'
-    buf:put(self.entities.not_alive_count)
+    buf:put(self.entities.not_alive_count.counter.value[self.t])
     buf:put '\nComponents tag count:'
-    buf:put(self.components.tag_count)
+    buf:put(self.components.tag_count.counter.value[self.t])
     buf:put '\nComponents component count:'
-    buf:put(self.components.component_count)
+    buf:put(self.components.component_count.counter.value[self.t])
     buf:put '\nComponents pair count:'
-    buf:put(self.components.pair_count)
+    buf:put(self.components.pair_count.counter.value[self.t])
     buf:put '\nComponents type count:'
-    buf:put(self.components.type_count)
+    buf:put(self.components.type_count.counter.value[self.t])
     buf:put '\nComponents create count:'
-    buf:put(self.components.create_count)
+    buf:put(self.components.create_count.counter.value[self.t])
     buf:put '\nComponents delete count:'
-    buf:put(self.components.delete_count)
+    buf:put(self.components.delete_count.counter.value[self.t])
     buf:put '\nTables count:'
-    buf:put(self.tables.count)
+    buf:put(self.tables.count.counter.value[self.t])
     buf:put '\nTables empty count:'
-    buf:put(self.tables.empty_count)
+    buf:put(self.tables.empty_count.counter.value[self.t])
     buf:put '\nTables create count:'
-    buf:put(self.tables.create_count)
+    buf:put(self.tables.create_count.counter.value[self.t])
     buf:put '\nTables delete count:'
-    buf:put(self.tables.delete_count)
+    buf:put(self.tables.delete_count.counter.value[self.t])
     buf:put '\nQueries query count:'
-    buf:put(self.queries.query_count)
+    buf:put(self.queries.query_count.counter.value[self.t])
     buf:put '\nQueries observer count:'
-    buf:put(self.queries.observer_count)
+    buf:put(self.queries.observer_count.counter.value[self.t])
     buf:put '\nQueries system count:'
-    buf:put(self.queries.system_count)
+    buf:put(self.queries.system_count.counter.value[self.t])
     buf:put '\nCommands add count:'
-    buf:put(self.commands.add_count)
+    buf:put(self.commands.add_count.counter.value[self.t])
     buf:put '\nCommands remove count:'
-    buf:put(self.commands.remove_count)
+    buf:put(self.commands.remove_count.counter.value[self.t])
     buf:put '\nCommands delete count:'
-    buf:put(self.commands.delete_count)
+    buf:put(self.commands.delete_count.counter.value[self.t])
     buf:put '\nCommands clear count:'
-    buf:put(self.commands.clear_count)
+    buf:put(self.commands.clear_count.counter.value[self.t])
     buf:put '\nCommands set count:'
-    buf:put(self.commands.set_count)
+    buf:put(self.commands.set_count.counter.value[self.t])
     buf:put '\nCommands ensure count:'
-    buf:put(self.commands.ensure_count)
+    buf:put(self.commands.ensure_count.counter.value[self.t])
     buf:put '\nCommands modified count:'
-    buf:put(self.commands.modified_count)
+    buf:put(self.commands.modified_count.counter.value[self.t])
     buf:put '\nCommands other count:'
-    buf:put(self.commands.other_count)
+    buf:put(self.commands.other_count.counter.value[self.t])
     buf:put '\nCommands discard count:'
-    buf:put(self.commands.discard_count)
+    buf:put(self.commands.discard_count.counter.value[self.t])
     buf:put '\nCommands batched entity count:'
-    buf:put(self.commands.batched_entity_count)
+    buf:put(self.commands.batched_entity_count.counter.value[self.t])
     buf:put '\nCommands batched count:'
-    buf:put(self.commands.batched_count)
+    buf:put(self.commands.batched_count.counter.value[self.t])
     buf:put '\nFrame frame count:'
-    buf:put(self.frame.frame_count)
+    buf:put(self.frame.frame_count.counter.value[self.t])
     buf:put '\nFrame merge count:'
-    buf:put(self.frame.merge_count)
+    buf:put(self.frame.merge_count.counter.value[self.t])
     buf:put '\nFrame rematch count:'
-    buf:put(self.frame.rematch_count)
+    buf:put(self.frame.rematch_count.counter.value[self.t])
     buf:put '\nFrame pipeline build count:'
-    buf:put(self.frame.pipeline_build_count)
+    buf:put(self.frame.pipeline_build_count.counter.value[self.t])
     buf:put '\nFrame systems ran:'
-    buf:put(self.frame.systems_ran)
+    buf:put(self.frame.systems_ran.counter.value[self.t])
     buf:put '\nFrame observers ran:'
-    buf:put(self.frame.observers_ran)
+    buf:put(self.frame.observers_ran.counter.value[self.t])
     buf:put '\nFrame event emit count:'
-    buf:put(self.frame.event_emit_count)
+    buf:put(self.frame.event_emit_count.counter.value[self.t])
     buf:put '\nPerformance world time raw:'
-    buf:put(self.performance.world_time_raw)
+    buf:put(self.performance.world_time_raw.counter.value[self.t])
     buf:put '\nPerformance world time:'
-    buf:put(self.performance.world_time)
+    buf:put(self.performance.world_time.counter.value[self.t])
     buf:put '\nPerformance frame time:'
-    buf:put(self.performance.frame_time)
+    buf:put(self.performance.frame_time.counter.value[self.t])
     buf:put '\nPerformance system time:'
-    buf:put(self.performance.system_time)
+    buf:put(self.performance.system_time.counter.value[self.t])
     buf:put '\nPerformance emit time:'
-    buf:put(self.performance.emit_time)
+    buf:put(self.performance.emit_time.counter.value[self.t])
     buf:put '\nPerformance merge time:'
-    buf:put(self.performance.merge_time)
+    buf:put(self.performance.merge_time.counter.value[self.t])
     buf:put '\nPerformance rematch time:'
-    buf:put(self.performance.rematch_time)
+    buf:put(self.performance.rematch_time.counter.value[self.t])
     buf:put '\nPerformance fps:'
-    buf:put(self.performance.fps)
+    buf:put(self.performance.fps.counter.value[self.t])
     buf:put '\nPerformance delta time:'
-    buf:put(self.performance.delta_time)
+    buf:put(self.performance.delta_time.counter.value[self.t])
     buf:put '\nMemory alloc count:'
-    buf:put(self.memory.alloc_count)
+    buf:put(self.memory.alloc_count.counter.value[self.t])
     buf:put '\nMemory realloc count:'
-    buf:put(self.memory.realloc_count)
+    buf:put(self.memory.realloc_count.counter.value[self.t])
     buf:put '\nMemory free count:'
-    buf:put(self.memory.free_count)
+    buf:put(self.memory.free_count.counter.value[self.t])
     buf:put '\nMemory outstanding alloc count:'
-    buf:put(self.memory.outstanding_alloc_count)
+    buf:put(self.memory.outstanding_alloc_count.counter.value[self.t])
     buf:put '\nMemory block alloc count:'
-    buf:put(self.memory.block_alloc_count)
+    buf:put(self.memory.block_alloc_count.counter.value[self.t])
     buf:put '\nMemory block free count:'
-    buf:put(self.memory.block_free_count)
+    buf:put(self.memory.block_free_count.counter.value[self.t])
     buf:put '\nMemory block outstanding alloc count:'
-    buf:put(self.memory.block_outstanding_alloc_count)
+    buf:put(self.memory.block_outstanding_alloc_count.counter.value[self.t])
     buf:put '\nMemory stack alloc count:'
-    buf:put(self.memory.stack_alloc_count)
+    buf:put(self.memory.stack_alloc_count.counter.value[self.t])
     buf:put '\nMemory stack free count:'
-    buf:put(self.memory.stack_free_count)
+    buf:put(self.memory.stack_free_count.counter.value[self.t])
     buf:put '\nMemory stack outstanding alloc count:'
-    buf:put(self.memory.stack_outstanding_alloc_count)
+    buf:put(self.memory.stack_outstanding_alloc_count.counter.value[self.t])
     buf:put '\nHTTP request received count:'
-    buf:put(self.http.request_received_count)
+    buf:put(self.http.request_received_count.counter.value[self.t])
     buf:put '\nHTTP request invalid count:'
-    buf:put(self.http.request_invalid_count)
+    buf:put(self.http.request_invalid_count.counter.value[self.t])
     buf:put '\nHTTP request handled ok count:'
-    buf:put(self.http.request_handled_ok_count)
+    buf:put(self.http.request_handled_ok_count.counter.value[self.t])
     buf:put '\nHTTP request handled error count:'
-    buf:put(self.http.request_handled_error_count)
+    buf:put(self.http.request_handled_error_count.counter.value[self.t])
     buf:put '\nHTTP request not handled count:'
-    buf:put(self.http.request_not_handled_count)
+    buf:put(self.http.request_not_handled_count.counter.value[self.t])
     buf:put '\nHTTP request preflight count:'
-    buf:put(self.http.request_preflight_count)
+    buf:put(self.http.request_preflight_count.counter.value[self.t])
     buf:put '\nHTTP send ok count:'
-    buf:put(self.http.send_ok_count)
+    buf:put(self.http.send_ok_count.counter.value[self.t])
     buf:put '\nHTTP send error count:'
-    buf:put(self.http.send_error_count)
+    buf:put(self.http.send_error_count.counter.value[self.t])
     buf:put '\nHTTP busy count:'
-    buf:put(self.http.busy_count)
+    buf:put(self.http.busy_count.counter.value[self.t])
 
     return buf:get()
   end,

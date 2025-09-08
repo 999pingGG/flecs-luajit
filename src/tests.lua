@@ -4,11 +4,13 @@ local world = ecs.init()
 
 print('Hello, ' .. tostring(world))
 
-print 'World info'
+print '*** World information ***'
 print(world:info())
+print '*************************'
 
-print 'World stats'
+print '*** World stats ***'
 print(world:stats())
+print '*******************'
 
 world:dim(999)
 
