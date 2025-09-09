@@ -9,7 +9,10 @@ implemented yet. Based on [https://github.com/flecs-hub/flecs-lua/]()
 ## How to build and run the tests
 
 - Run `utils/preprocess.sh` from the project root. This will generate the FFI cdefs for Flecs from `libs/flecs/flecs.h`,
-append `src/ecs.lua` and generate the final Lua file, ready to use, in `distr/ecs.lua`.
+append `src/ecs.lua` and generate the final Lua file, ready to use, in `distr/ecs.lua`. `utils/preprocess.bat` does the
+same for Windows, you just need to have `cl.exe` available in your `PATH`. One way to do it is by executing it in a
+"Command Prompt for VS 20xx", available from the start menu. The output is equivalent to LuaJIT, but it is uglier. I
+wouldn't use it to generate the distribution Lua file that is to be commited.
 - Do a standard CMake build. 
 - Download, compile and install LuaJIT following the directions in the [official webpage](https://luajit.org/), or just
 install it from your distro's package repositories, but I don't personally use those.
