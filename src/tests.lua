@@ -1,4 +1,4 @@
-local ecs = require 'ecs'
+local ecs = select(1, ...)
 
 local world = ecs.init()
 
@@ -220,6 +220,8 @@ world:singleton_set(monster_component, {
   float_field = 11.11,
   double_field = 22.22,
 })
+
+print(world:singleton_get(monster_component))
 
 print 'Tests with a monster component succeeded.'
 
