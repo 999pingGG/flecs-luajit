@@ -24,12 +24,13 @@ directory `libs/lua/luajit-2.1`. Blame Windows for not having a standard way to 
 
 ## Embedding into another app
 
-On the Lua side, you only need `distr/ecs.lua`, the standard Lua libraries and the standard FFI, BitOp and string buffer
-LuaJIT libraries. On the C side, your app needs to export Flecs' symbols, which Linux does by default. For Windows, you
-need to comment out the second line `#define flecs_STATIC` in `flecs.h` and define `flecs_EXPORTS`, probably unless you
-use Flecs as a DLL, but I haven't tested this. Also, it's important to define `FLECS_SOFT_ASSERT` to make Flecs do some
-checks and allow it to recover from recoverable errors, specially if you run third-party code! Finally, just run
-`distr/ecs.lua` however you want. It returns the entire module as a table.
+On the Lua side, you only need `distr/ecs.lua`, the standard Lua libraries, and the FFI, BitOp and string buffer
+LuaJIT libraries, all included with the latest LuaJIT commits. On the C side, your app needs to export Flecs' symbols,
+which *nix compilers do by default. For Windows, you need to comment out the second line `#define flecs_STATIC` in
+`flecs.h` and define `flecs_EXPORTS`, probably unless you use Flecs as a DLL, but I haven't tested this. Also, it's
+important to define `FLECS_SOFT_ASSERT` to make Flecs do some checks and allow for recoverable errors, specially if you
+run third-party code, like game mods! Finally, just run `ecs.lua` however you want. It returns the entire module as a
+table.
 
 ## Configuration
 
