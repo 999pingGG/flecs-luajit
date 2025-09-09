@@ -385,6 +385,7 @@ ecs_entity_t ecs_array_init(ecs_world_t *world, const ecs_array_desc_t *desc);
 void ecs_set_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id, size_t size, const void *ptr);
 const void* ecs_get_id(const ecs_world_t *world, ecs_entity_t entity, ecs_id_t id);
 void ecs_set_id(ecs_world_t *world, ecs_entity_t entity, ecs_id_t id, size_t size, const void *ptr);
+char* ecs_ptr_to_expr(const ecs_world_t *world, ecs_entity_t type, const void *data);
 ]]
 
 local ecs_world_info_t = ffi.typeof 'ecs_world_info_t'
@@ -519,8 +520,6 @@ local flecs_type_map = {
   float = 'f32',
   double = 'f64',
   int = 'i32',
-  float = 'f32',
-  double = 'f64',
 }
 
 local function check_c_identifier(identifier)
@@ -931,6 +930,15 @@ ffi.metatype('ecs_world_t', {
         const_ptr = ffi.typeof('const ' .. c_identifier .. '*'),
         size = ffi.sizeof(c_identifier),
       }
+
+      ffi.metatype(c_identifier, {
+        __tostring = function (this)
+          local ptr = ffi.C.ecs_ptr_to_expr(self, component, this)
+          local result = ffi.string(ptr)
+          ffi.C.free(ptr)
+          return result
+        end
+      })
 
       init_scope(self, component)
       return component

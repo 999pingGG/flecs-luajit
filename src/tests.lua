@@ -223,4 +223,14 @@ world:singleton_set(monster_component, {
 
 print 'Tests with a monster component succeeded.'
 
-print('All tests passed successfully!')
+local velocity = world:new_struct('Velocity', '{ double x; double y; double z; }')
+
+entities = {}
+for i = 1, 10 do
+  table.insert(entities, world:new('Particle #' .. i, 'Translation, Velocity'))
+  print(world:name(entities[i]))
+  print('Translation: ' .. tostring(world:get(entities[i], translation)))
+  print('Velocity: ' .. tostring(world:get(entities[i], velocity)))
+end
+
+print 'All tests passed successfully!'
