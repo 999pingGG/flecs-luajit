@@ -1,5 +1,6 @@
 # flecs-luajit
 [![License: WTFPL](https://img.shields.io/badge/License-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
+![WIP](https://img.shields.io/badge/WIP-red)
 
 **WIP** single-file and pure Lua bindings for [Flecs](https://github.com/SanderMertens/flecs/) using the LuaJIT FFI. The
 aim is to implement at least all the basic Flecs' features that allow making a game. Unsafer operations are not
@@ -18,7 +19,7 @@ argument and the path to `src/tests.lua` as the second argument. You can set tho
 directory under this project's root `libs/luajit`. Copy `lua.h`, `luaconf.h`, `lualib.h` and `lauxlib.h` to a new
 directory `libs/lua/luajit-2.1`. Blame Windows for not having a standard way to install development libraries.
 
-### Embedding into another app
+## Embedding into another app
 
 On the Lua side, you only need `distr/ecs.lua`, the standard Lua libraries and the standard FFI, BitOp and string buffer
 LuaJIT libraries. On the C side, your app needs to export Flecs' symbols, which Linux does by default. For Windows, you
@@ -34,7 +35,7 @@ customize Flecs' macros. Notably, you can customize `ecs_float_t` and `ecs_ftime
 example with `./utils/preprocess.sh -Decs_ftime_t=double -Decs_float_t=double`. You MUST make sure to preprocess and
 compile `flecs.c` with the same definitions, otherwise chaos will ensure!
 
-### Caveats
+## Caveats
 
 This library uses `ffi.C.free()` to release the memory allocated and returned by Flecs, so don't pass custom memory
 management functions to Flecs (for example, by using `ecs_os_set_api()`)! This unsafe operation is not yet implemented.
