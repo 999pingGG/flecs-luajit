@@ -15,10 +15,8 @@ static int traceback(lua_State *L) {
 }
 
 int main(const int argc, const char* argv[]) {
-  if (argc != 3) {
-    fprintf(stderr, "Usage: %s <path-to-distr-ecs.lua> <path-to-tests.lua>\n", argv[0]);
-    return EXIT_FAILURE;
-  }
+  (void)argc;
+  (void)argv;
 
   lua_State* L = luaL_newstate();
   if (!L) {
@@ -32,8 +30,7 @@ int main(const int argc, const char* argv[]) {
   lua_pushcfunction(L, traceback);
   const int error_handler_index = lua_gettop(L);
 
-  // Load ecs.lua
-  if (luaL_loadfile(L, argv[1]) != LUA_OK) {
+  if (luaL_loadfile(L, "ecs.lua") != LUA_OK) {
     fprintf(stderr, "%s\n", lua_tostring(L, -1));
     goto error;
   }
@@ -45,14 +42,13 @@ int main(const int argc, const char* argv[]) {
   }
 
   if (!lua_istable(L, -1)) {
-    fprintf(stderr, "%s must return a table!\n", argv[1]);
+    fprintf(stderr, "ecs.lua must return a table!\n");
     goto error;
   }
 
   // stack: error_handler_index, ecs_table
 
-  // load tests.lua
-  if (luaL_loadfile(L, argv[2]) != LUA_OK) {
+  if (luaL_loadfile(L, "tests.lua") != LUA_OK) {
     fprintf(stderr, "%s\n", lua_tostring(L, -1));
     goto error;
   }
