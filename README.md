@@ -8,19 +8,19 @@ implemented yet. Based on [https://github.com/flecs-hub/flecs-lua/]()
 
 ## How to build and run the tests
 
-- Run `utils/preprocess.sh` from the project root. This will generate the FFI cdefs for Flecs from `libs/flecs/flecs.h`,
-append `src/ecs.lua` and generate the final Lua file, ready to use, in `distr/ecs.lua`. `utils/preprocess.bat` does the
-same for Windows, you just need to have `cl.exe` available in your `PATH`. One way to do it is by executing it in a
-"Command Prompt for VS 20xx", available from the start menu. The output is equivalent to LuaJIT, but it is uglier. I
-wouldn't use it to generate the distribution Lua file that is to be commited.
-- Do a standard CMake build. 
+- Do a standard CMake build. This will automagically run `utils/preprocess.(sh|bat)` having the project root as the
+current working directory every time the Lua source or the Flecs header change. The script generates the FFI cdefs for
+Flecs from `libs/flecs/flecs.h`, appends `src/ecs.lua` and generates the final Lua file, ready to use, in
+`distr/ecs.lua`. In Windows, you need to have `cl.exe` available in your `PATH`. One way to do it is by executing it in
+a "Command Prompt for VS 20xx," available from the start menu. The output is equivalent to LuaJIT, but it is uglier. I
+wouldn't use it to generate the distribution Lua file that is to be committed.
 - Download, compile and install LuaJIT following the directions in the [official webpage](https://luajit.org/), or just
-install it from your distro's package repositories, but I don't personally use those.
-- When running the test program, pass the full path to the file originally placed in `distr/ecs.lua` as the first
-argument and the path to `src/tests.lua` as the second argument. You can set those in your IDE.
-- For Windows, after compiling LuaJIT, copy or symlink `lua51.lib` found at `luajit/src` after the build to a new
-directory under this project's root `libs/luajit`. Copy `lua.h`, `luaconf.h`, `lualib.h` and `lauxlib.h` to a new
-directory `libs/lua/luajit-2.1`. Blame Windows for not having a standard way to install development libraries.
+install it from your distro's package repositories, but I don't personally use those. For Windows, after compiling
+LuaJIT, copy or symlink `lua51.lib` found at `luajit/src` after the build to a new directory under this project's root
+`libs/luajit`. Copy `lua.h`, `luaconf.h`, `lualib.h` and `lauxlib.h` to a new directory `libs/lua/luajit-2.1`. Blame
+W*ndows for not having a standard way to install development libraries.
+- When running the test program, make sure the `distr/ecs.lua` and `src/tests.lua` files are available in the current
+working directory. CMake takes care of this automatically (copies the files to the binary directory).
 
 ## Embedding into another app
 
@@ -43,3 +43,7 @@ compile `flecs.c` with the same definitions, otherwise chaos will ensure!
 
 This library uses `ffi.C.free()` to release the memory allocated and returned by Flecs, so don't pass custom memory
 management functions to Flecs (for example, by using `ecs_os_set_api()`)! This unsafe operation is not yet implemented.
+
+## TODO
+- Ensure the library is more or less safe to expose to third-party code, like mods.
+- Allow for custom `ecs_os_api_t`.
