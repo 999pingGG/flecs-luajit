@@ -4777,18 +4777,12 @@ const ecs_member_t* ecs_cpp_last_member(
     ecs_entity_t type);
 ]]
 
-require('jit').off()
 local bit = require 'bit'
 local ffi = require 'ffi'
 local buffer = require 'string.buffer'
 local table = table
 
--- TODO: Add a way to prevent requiring the library twice and passing worlds created in one instante to another.
--- This will wreak havoc!
-
 ffi.cdef[[
-__declspec(dllexport) void dbreak(void);
-
 // Define some opaque types we can (hopefully) safely expose to the public.
 // I say safely because fortunately, LuaJIT doesn't allow pointer arithmetic on those
 // nor implicit casts between incompatible types.
@@ -5021,14 +5015,6 @@ local function generate_definitions(description)
 end
 
 local c_identifier_sequence = 0
-
--- local function address_of_cdata(cdata)
---   -- With a Lua number we can represent all integers up to 2^53,
---   -- and as of today LuaJIT uses only the lower 47 bits of a pointer.
---   -- So, this is a neat trick that enables us to avoid boxed pointers
---   -- or converting addresses to strings.
---   return tonumber(ffi.cast('uintptr_t', cdata))
--- end
 
 local function finish_query_wrapper(wrapper)
   wrapper = ffi.cast(query_wrapper_t_ptr, wrapper)
@@ -5406,18 +5392,6 @@ ffi.metatype('ecs_world_t', {
         error(error_message, 2)
       end
       local component_c_types = ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(self)).component_c_types
-      -- local component_ctypes = worlds[address_of_cdata(self)].component_ctypes
-      -- In LuaJIT, uint64_t is boxed in a cdata object. And every time you make a new uint64_t by any means,
-      -- you get a different cdata object, which counts as a different table index!
-      -- Therefore, the quick, easy and correct workaround is to convert the component ID to string
-      -- and use that instead.
-      -- https://luajit.org/ext_ffi_semantics.html#cdata_key
-      -- component_ctypes[tostring(component)] = {
-      --   struct = ffi.typeof(c_identifier),
-      --   ptr = ffi.typeof(c_identifier .. '*'),
-      --   const_ptr = ffi.typeof('const ' .. c_identifier .. '*'),
-      --   size = ffi.sizeof(c_identifier),
-      -- }
       c.ecs_map_insert(component_c_types, component, ffi.cast(uint64_t, c.ecs_os_api.strdup_(c_identifier)))
 
       ffi.metatype(c_identifier, {
@@ -5830,13 +5804,13 @@ local function finish_iter_wrapper(wrapper)
     c.ecs_map_remove(
       ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(wrapper.iter.world)).alive_iterators,
       ffi.cast(uint64_t, wrapper))
+    -- TODO: ONLY CALL THIS IF THE ITERATOR STILL HAS NOT BEEN ITERATED TILL THE END
     c.ecs_iter_fini(wrapper.iter)
   end
   c.ecs_os_api.free_(wrapper)
 end
 
 local function invalidate_iter_wrapper(wrapper)
-  print('invalidate_iter_wrapper()', debug.traceback())
   ffi.cast(iter_wrapper_t_ptr, ffi.cast(ecs_iter_t_ptr, wrapper).binding_ctx).invalid = true
 end
 
@@ -5850,7 +5824,6 @@ ffi.metatype(public_ecs_query_t, {
 
       local world = query_wrapper.query.world
 
-      -- local result = ffi.gc(ecs_iter_t_vla(1, { c.ecs_query_iter(query.world, query) }), finish_iter)
       local wrapper = ffi.cast(
         iter_wrapper_t_ptr,
         c.ecs_os_api.malloc_(ffi.sizeof(iter_wrapper_t)))
@@ -5875,7 +5848,7 @@ ffi.metatype(public_ecs_query_t, {
   __tostring = function (self)
     local query_wrapper = ffi.cast(query_wrapper_t_ptr, self)
     if query_wrapper.query == nil then
-      return 'Finished query.'
+      return 'Invalid query.'
     end
 
     local ptr = c.ecs_query_str(query_wrapper.query)
@@ -5923,8 +5896,8 @@ local function finish_world_binding_context(binding_context)
   iter[0] = c.ecs_map_iter(binding_context.alive_iterators)
   while c.ecs_map_next(iter) do
     local wrapper = ffi.cast(iter_wrapper_t_ptr, iter[0].res[0])
+    -- TODO: ONLY CALL THIS IF THE ITERATOR STILL HAS NOT BEEN ITERATED TILL THE END
     c.ecs_iter_fini(wrapper.iter)
-    print('finish_world_binding_context()', debug.traceback())
     wrapper.invalid = true
   end
 
@@ -5974,7 +5947,5 @@ ret.cache = {
   all = c.EcsQueryCacheAll,
   none = c.EcsQueryCacheNone,
 }
-
--- TODO: For ecs_query_desc_t: flags, and check all the callbacks and void pointers.
 
 return ret

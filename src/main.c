@@ -14,9 +14,75 @@ static int traceback(lua_State *L) {
   return 1;
 }
 
+#include "flecs.h"
+#include <time.h>
+
+static void add_entities(ecs_world_t* world, ecs_entity_t* components, int count, int n) {
+  for (int i = 0; i < n; i++) {
+    ecs_entity_t entity = ecs_new(world);
+    for (int i = 0; i < (rand() % 5) + 1; i++) {
+        ecs_add_id(world, entity, components[rand() % count]);
+    }
+  }
+}
+
 int main(const int argc, const char* argv[]) {
   (void)argc;
   (void)argv;
+
+  ecs_world_t* world = ecs_init();
+
+  ecs_entity_t components[] = {
+      ecs_new(world),
+      ecs_new(world),
+      ecs_new(world),
+      ecs_new(world),
+      ecs_new(world),
+      ecs_new(world),
+      ecs_new(world),
+      ecs_new(world),
+  };
+
+  srand((unsigned int)time(NULL));
+
+  add_entities(world, components, sizeof(components) / sizeof(components[0]), 100);
+
+  ecs_query_t* q = ecs_query_init(world, &(ecs_query_desc_t){
+      .terms = {
+        { .id = components[0] },
+	  }
+  });
+
+  ecs_iter_t it = ecs_query_iter(world, q);
+  int tables = 0;
+  while (ecs_query_next(&it)) {
+	printf("Matched %d entities\n", it.count);
+    for (int i = 0; i < it.count; i++) {
+      printf("Entity %llu has component %llu\n", it.entities[i], components[0]);
+    }
+    if (++tables > 4) {
+        printf("bailing out\n");
+        break;
+    }
+  }
+
+  add_entities(world, components, sizeof(components) / sizeof(components[0]), 10000);
+
+  while (ecs_query_next(&it)) {
+      printf("Matched %d entities\n", it.count);
+      for (int i = 0; i < it.count; i++) {
+          printf("Entity %llu has component %llu\n", it.entities[i], components[0]);
+      }
+      if (++tables > 4) {
+          printf("bailing out\n");
+          break;
+      }
+  }
+
+  //ecs_iter_fini(&it);
+
+  ecs_fini(world);
+  return 0;
 
   lua_State* L = luaL_newstate();
   if (!L) {

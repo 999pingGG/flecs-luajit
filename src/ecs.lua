@@ -1025,6 +1025,7 @@ local function finish_iter_wrapper(wrapper)
     c.ecs_map_remove(
       ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(wrapper.iter.world)).alive_iterators,
       ffi.cast(uint64_t, wrapper))
+    -- TODO: ONLY CALL THIS IF THE ITERATOR STILL HAS NOT BEEN ITERATED TILL THE END
     c.ecs_iter_fini(wrapper.iter)
   end
   c.ecs_os_api.free_(wrapper)
@@ -1116,6 +1117,7 @@ local function finish_world_binding_context(binding_context)
   iter[0] = c.ecs_map_iter(binding_context.alive_iterators)
   while c.ecs_map_next(iter) do
     local wrapper = ffi.cast(iter_wrapper_t_ptr, iter[0].res[0])
+    -- TODO: ONLY CALL THIS IF THE ITERATOR STILL HAS NOT BEEN ITERATED TILL THE END
     c.ecs_iter_fini(wrapper.iter)
     wrapper.invalid = true
   end
