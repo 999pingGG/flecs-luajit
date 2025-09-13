@@ -4,18 +4,80 @@ local buffer = require 'string.buffer'
 local table = table
 
 ffi.cdef[[
-void free(void *ptr);
+// Define some opaque types we can (hopefully) safely expose to the public.
+// I say safely because fortunately, LuaJIT doesn't allow pointer arithmetic on those
+// nor implicit casts between incompatible types.
+typedef struct public_ecs_query_t public_ecs_query_t;
+typedef struct public_ecs_iter_t  public_ecs_iter_t;
+
+// Define some helper types.
+typedef struct world_binding_context_t {
+  // Maps component IDs to the names the FFI understands.
+  ecs_map_t component_c_types;
+  // Maps that works as sets. The keys are pointers to query_wrapper_t and iter_wrapper_t
+  // that need to be finished upon world destruction. Values are unused.
+  ecs_map_t alive_iterators, alive_queries;
+} world_binding_context_t;
+
+typedef struct query_wrapper_t {
+  ecs_query_t* query;
+} query_wrapper_t;
+
+// Define some helper custom types we need internally.
+typedef struct iter_wrapper_t {
+  ecs_iter_t iter;
+  int32_t i;
+  bool invalid;
+} iter_wrapper_t;
 ]]
 
-local ecs_world_info_t = ffi.typeof 'ecs_world_info_t'
-local ecs_world_stats_t = ffi.typeof 'ecs_world_stats_t'
-local ecs_metric_t = ffi.typeof 'ecs_metric_t'
-local uint32_t = ffi.typeof 'uint32_t'
-local uint64_t = ffi.typeof 'uint64_t'
-local uint64_t_vla = ffi.typeof 'uint64_t[?]'
-local EcsType = ffi.typeof 'EcsType'
-local ecs_entity_desc_t = ffi.typeof 'ecs_entity_desc_t'
-local ecs_array_desc_t = ffi.typeof 'ecs_array_desc_t'
+local c = ffi.C
+
+-- Flecs types
+
+local ecs_world_info_t            = ffi.typeof 'ecs_world_info_t'
+local ecs_world_stats_t           = ffi.typeof 'ecs_world_stats_t'
+local ecs_metric_t                = ffi.typeof 'ecs_metric_t'
+local EcsType                     = ffi.typeof 'EcsType'
+
+-- Standard C types
+
+local uint32_t                    = ffi.typeof 'uint32_t'
+local uint64_t                    = ffi.typeof 'uint64_t'
+local uint64_t_vla                = ffi.typeof 'uint64_t[?]'
+
+-- Convenience types
+
+local void_ptr                    = ffi.typeof 'void*'
+local void_func                   = ffi.typeof 'void (*)(void)'
+local char_ptr                    = ffi.typeof 'char*'
+local char_ptr_ptr                = ffi.typeof 'char**'
+
+local world_binding_context_t     = ffi.typeof 'world_binding_context_t'
+local world_binding_context_t_ptr = ffi.typeof 'world_binding_context_t*'
+
+local ecs_entity_desc_t           = ffi.typeof 'ecs_entity_desc_t'
+
+local ecs_array_desc_t            = ffi.typeof 'ecs_array_desc_t'
+
+local ecs_query_desc_t            = ffi.typeof 'ecs_query_desc_t'
+
+local ecs_map_t                   = ffi.typeof 'ecs_map_t'
+local ecs_map_t_ptr               = ffi.typeof 'ecs_map_t*'
+local ecs_map_iter_t_vla          = ffi.typeof 'ecs_map_iter_t[?]'
+
+local ecs_query_t_ptr             = ffi.typeof 'ecs_query_t*'
+local public_ecs_query_t          = ffi.typeof 'public_ecs_query_t'
+local public_ecs_query_t_ptr      = ffi.typeof 'public_ecs_query_t*'
+local query_wrapper_t             = ffi.typeof 'query_wrapper_t'
+local query_wrapper_t_ptr         = ffi.typeof 'query_wrapper_t*'
+
+local ecs_iter_t_ptr              = ffi.typeof 'ecs_iter_t*'
+-- local ecs_iter_t_vla             = ffi.typeof 'ecs_iter_t[?]'
+local public_ecs_iter_t           = ffi.typeof 'public_ecs_iter_t'
+local public_ecs_iter_t_ptr       = ffi.typeof 'public_ecs_iter_t*'
+local iter_wrapper_t              = ffi.typeof 'iter_wrapper_t'
+local iter_wrapper_t_ptr          = ffi.typeof 'iter_wrapper_t*'
 
 local function is_entity(entity)
   return type(entity) == 'cdata' and ffi.typeof(entity) == uint64_t
@@ -34,23 +96,23 @@ local function ecs_entity_t_comb(lo, hi)
 end
 
 local function ecs_pair(pred, obj)
-  return bit.bor(ffi.C.ECS_PAIR, ecs_entity_t_comb(obj, pred))
+  return bit.bor(c.ECS_PAIR, ecs_entity_t_comb(obj, pred))
 end
 
 local function ecs_add_pair(world, subject, first, second)
-  ffi.C.ecs_add_id(world, subject, ecs_pair(first, second))
+  c.ecs_add_id(world, subject, ecs_pair(first, second))
 end
 
 local function ecs_get_path(world, entity)
-  return ffi.C.ecs_get_path_w_sep(world, 0, entity, '.', nil)
+  return c.ecs_get_path_w_sep(world, 0, entity, '.', nil)
 end
 
 local function ecs_has_pair(world, entity, first, second)
-  return ffi.C.ecs_has_id(world, entity, ecs_pair(first, second))
+  return c.ecs_has_id(world, entity, ecs_pair(first, second))
 end
 
 local function ecs_remove_pair(world, subject, first, second)
-  ffi.C.ecs_remove_id(world, subject, ecs_pair(first, second))
+  c.ecs_remove_id(world, subject, ecs_pair(first, second))
 end
 
 local ECS_ID_FLAGS_MASK = bit.lshift(0xFFull, 60)
@@ -72,7 +134,7 @@ local function ECS_HAS_ID_FLAG(e, flag)
 end
 
 local function ECS_IS_PAIR(id)
-  return bit.band(id, ECS_ID_FLAGS_MASK) == ffi.C.ECS_PAIR
+  return bit.band(id, ECS_ID_FLAGS_MASK) == c.ECS_PAIR
 end
 
 local function ECS_PAIR_FIRST(e)
@@ -84,61 +146,61 @@ local function ECS_PAIR_SECOND(e)
 end
 
 local function ecs_pair_first(world, pair)
-  return ffi.C.ecs_get_alive(world, ECS_PAIR_FIRST(pair))
+  return c.ecs_get_alive(world, ECS_PAIR_FIRST(pair))
 end
 
 local function ecs_pair_second(world, pair)
-  return ffi.C.ecs_get_alive(world, ECS_PAIR_SECOND(pair))
+  return c.ecs_get_alive(world, ECS_PAIR_SECOND(pair))
 end
 
 local ecs_pair_relation = ecs_pair_first
 local ecs_pair_target = ecs_pair_second
 
 local function ECS_HAS_RELATION(e, rel)
-  return ECS_HAS_ID_FLAG(e, ffi.C.ECS_PAIR) and ECS_PAIR_FIRST() ~= 0
+  return ECS_HAS_ID_FLAG(e, c.ECS_PAIR) and ECS_PAIR_FIRST() ~= 0
 end
 
 local function init_scope(world, id)
-  local scope = ffi.C.ecs_get_scope(world)
+  local scope = c.ecs_get_scope(world)
   if scope ~= 0 then
-    ecs_add_pair(world, id, ffi.C.EcsChildOf, scope)
+    ecs_add_pair(world, id, c.EcsChildOf, scope)
   end
 end
 
 local forbidden_struct_patterns = {
-  { pattern = '%*', error_message = 'No pointers allowed.' },
-  { pattern = '[%[%]]', error_message = 'No arrays allowed.' },
-  { pattern = '%f[%w_]uptr%f[^%w_]', error_message = 'No pointers allowed.' },
-  { pattern = '%f[%w_]iptr%f[^%w_]', error_message = 'No pointers allowed.' },
+  { pattern = '%*',                    error_message = 'No pointers allowed.'       },
+  { pattern = '[%[%]]',                error_message = 'No arrays allowed.'         },
+  { pattern = '%f[%w_]uptr%f[^%w_]',   error_message = 'No pointers allowed.'       },
+  { pattern = '%f[%w_]iptr%f[^%w_]',   error_message = 'No pointers allowed.'       },
   { pattern = '%f[%w_]string%f[^%w_]', error_message = 'No strings allowed (yet?).' },
 }
 
 local c_type_map = {
   byte = 'unsigned char',
-  u8 = 'uint8_t',
-  u16 = 'uint16_t',
-  u32 = 'uint32_t',
-  u64 = 'uint64_t',
-  i8 = 'int8_t',
-  i16 = 'int16_t',
-  i32 = 'int32_t',
-  i64 = 'int64_t',
-  f32 = 'float',
-  f64 = 'double',
+  u8   = 'uint8_t',
+  u16  = 'uint16_t',
+  u32  = 'uint32_t',
+  u64  = 'uint64_t',
+  i8   = 'int8_t',
+  i16  = 'int16_t',
+  i32  = 'int32_t',
+  i64  = 'int64_t',
+  f32  = 'float',
+  f64  = 'double',
 }
 
 local flecs_type_map = {
-  uint8_t = 'u8',
+  uint8_t  = 'u8',
   uint16_t = 'u16',
   uint32_t = 'u32',
   uint64_t = 'u64',
-  int8_t = 'i8',
-  int16_t = 'i16',
-  int32_t = 'i32',
-  int64_t = 'i64',
-  float = 'f32',
-  double = 'f64',
-  int = 'i32',
+  int8_t   = 'i8',
+  int16_t  = 'i16',
+  int32_t  = 'i32',
+  int64_t  = 'i64',
+  float    = 'f32',
+  double   = 'f64',
+  int      = 'i32',
 }
 
 local function check_c_identifier(identifier)
@@ -158,7 +220,7 @@ end
 
 local function substitute_types(input, type_map)
   -- Replace types only when they are full words (surrounded by non-word boundaries).
-  return input:gsub("(%f[%w_])(%a[%w_]*)(%f[^%w_])", function(prefix, word, suffix)
+  return input:gsub("(%f[%w_])(%a[%w_]*)(%f[^%w_])", function (prefix, word, suffix)
     local replacement = type_map[word] or word
     return prefix .. replacement .. suffix
   end)
@@ -174,32 +236,45 @@ local function generate_definitions(description)
 end
 
 local c_identifier_sequence = 0
-local worlds = {}
+
+local function finish_query_wrapper(wrapper)
+  wrapper = ffi.cast(query_wrapper_t_ptr, wrapper)
+  if wrapper.query ~= nil then
+    c.ecs_query_fini(wrapper.query)
+    local binding_context = ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(wrapper.query.world))
+    c.ecs_map_remove(binding_context.alive_queries, ffi.cast(uint64_t, wrapper))
+  end
+  c.ecs_os_api.free_(wrapper)
+end
+
+local function invalidate_query_wrapper(wrapper)
+  ffi.cast(query_wrapper_t_ptr, wrapper).query = nil
+end
 
 ffi.metatype('ecs_world_t', {
   __index = {
     is_fini = function (self)
-      return ffi.C.ecs_is_fini(self)
+      return c.ecs_is_fini(self)
     end,
     info = function (self)
-      return ffi.C.ecs_get_world_info(self)
+      return c.ecs_get_world_info(self)
     end,
     stats = function (self)
       local stats = ecs_world_stats_t()
-      ffi.C.ecs_world_stats_get(self, stats)
+      c.ecs_world_stats_get(self, stats)
       return stats
     end,
     dim = function (self, entity_count)
-      ffi.C.ecs_dim(self, entity_count)
+      c.ecs_dim(self, entity_count)
     end,
     quit = function (self)
-      ffi.C.ecs_quit(self)
+      c.ecs_quit(self)
     end,
     should_quit = function (self)
-      return ffi.C.ecs_should_quit(self)
+      return c.ecs_should_quit(self)
     end,
     get_entities = function (self)
-      local entities = ffi.C.ecs_get_entities(self)
+      local entities = c.ecs_get_entities(self)
       local alive = {}
       local dead = {}
 
@@ -214,19 +289,19 @@ ffi.metatype('ecs_world_t', {
       return { alive = alive, dead = dead }
     end,
     get_flags = function (self)
-      return ffi.C.ecs_world_get_flags(self)
+      return c.ecs_world_get_flags(self)
     end,
     measure_frame_time = function (self, enable)
-      ffi.C.ecs_measure_frame_time(self, enable)
+      c.ecs_measure_frame_time(self, enable)
     end,
     measure_system_time = function (self, enable)
-      ffi.C.ecs_measure_system_time(self, enable)
+      c.ecs_measure_system_time(self, enable)
     end,
     set_target_fps = function (self, fps)
-      ffi.C.ecs_set_target_fps(self, fps)
+      c.ecs_set_target_fps(self, fps)
     end,
     set_default_query_flags = function (self, flags)
-      ffi.C.ecs_set_default_query_flags(self, flags)
+      c.ecs_set_default_query_flags(self, flags)
     end,
     new = function (self, arg1, arg2, arg3)
       local entity
@@ -235,7 +310,7 @@ ffi.metatype('ecs_world_t', {
 
       if not arg1 and not arg2 then
         --  entity | name(string)
-        entity = ffi.C.ecs_new(self)
+        entity = c.ecs_new(self)
       elseif arg2 and not arg3 then
         if is_entity(arg1) then
           -- entity, name (string)
@@ -257,8 +332,8 @@ ffi.metatype('ecs_world_t', {
         components = arg3
       end
 
-      if entity and name and ffi.C.ecs_is_alive(self, entity) then
-        local existing = ffi.C.ecs_get_name(self, entity)
+      if entity and name and c.ecs_is_alive(self, entity) then
+        local existing = c.ecs_get_name(self, entity)
         if existing ~= nil then
           if ffi.string(existing) == name then
             return entity
@@ -269,7 +344,7 @@ ffi.metatype('ecs_world_t', {
       end
 
       if (not entity or entity == 0) and name then
-        entity = ffi.C.ecs_lookup(self, name)
+        entity = c.ecs_lookup(self, name)
         if entity and entity ~= 0 then
           return entity
         end
@@ -277,48 +352,48 @@ ffi.metatype('ecs_world_t', {
 
       -- Create an entity, the following functions will take the same ID.
       if (not entity or entity == 0) and (arg1 or arg2) then
-        entity = ffi.C.ecs_new(self)
+        entity = c.ecs_new(self)
       end
 
-      if (entity and entity ~= 0) and not ffi.C.ecs_is_alive(self, entity) then
-        ffi.C.ecs_make_alive(self, entity)
+      if (entity and entity ~= 0) and not c.ecs_is_alive(self, entity) then
+        c.ecs_make_alive(self, entity)
       end
 
-      local scope = ffi.C.ecs_get_scope(self)
+      local scope = c.ecs_get_scope(self)
       if scope ~= 0 then
-        ecs_add_pair(self, entity, ffi.C.EcsChildOf, scope)
+        ecs_add_pair(self, entity, c.EcsChildOf, scope)
       end
 
       if components then
         -- TODO: Check whether this creates under the current scope, if any.
-        entity = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ id = entity, add_expr = components }))
+        entity = c.ecs_entity_init(self, ecs_entity_desc_t({ id = entity, add_expr = components }))
       end
 
       if name then
-        ffi.C.ecs_set_name(self, entity, name)
+        c.ecs_set_name(self, entity, name)
       end
 
       return entity ~= 0 and entity or nil
     end,
     delete = function (self, entity)
       if is_entity(entity) then
-        ffi.C.ecs_delete(self, entity)
+        c.ecs_delete(self, entity)
       else
         for i = 1, #entity do
-          ffi.C.ecs_delete(self, entity[i])
+          c.ecs_delete(self, entity[i])
         end
       end
     end,
     new_tag = function (self, name)
-      local entity = ffi.C.ecs_lookup(self, name)
+      local entity = c.ecs_lookup(self, name)
       if entity == 0 then
-        entity = ffi.C.ecs_set_name(self, entity, name)
+        entity = c.ecs_set_name(self, entity, name)
       end
 
       return entity ~= 0 and entity or nil
     end,
     name = function (self, entity, numeric_name)
-      local name = ffi.C.ecs_get_name(self, entity)
+      local name = c.ecs_get_name(self, entity)
       if name ~= nil then
         return ffi.string(name)
       elseif numeric_name and self:is_alive(entity) then
@@ -326,10 +401,10 @@ ffi.metatype('ecs_world_t', {
       end
     end,
     set_name = function (self, entity, name)
-      ffi.C.ecs_set_name(self, entity, name)
+      c.ecs_set_name(self, entity, name)
     end,
     symbol = function (self, entity)
-      local symbol = ffi.C.ecs_get_symbol(self, entity)
+      local symbol = c.ecs_get_symbol(self, entity)
       if symbol ~= nil then
         return ffi.string(symbol)
       end
@@ -337,97 +412,97 @@ ffi.metatype('ecs_world_t', {
     path = function (self, entity)
       local path = ecs_get_path(self, entity)
       local ret = ffi.string(path)
-      ffi.C.free(path)
+      c.ecs_os_api.free_(path)
       return ret
     end,
     lookup = function (self, path)
-      local ret = ffi.C.ecs_lookup(self, path)
+      local ret = c.ecs_lookup(self, path)
       return ret ~= 0 and ret or nil
     end,
     lookup_child = function (self, parent, name)
-      local ret = ffi.C.ecs_lookup_child(self, parent, name)
+      local ret = c.ecs_lookup_child(self, parent, name)
       return ret ~= 0 and ret or nil
     end,
     lookup_path = function (self, parent, path, sep, prefix)
-      local ret = ffi.C.ecs_lookup_path_w_sep(self, parent, path, sep, prefix, false)
+      local ret = c.ecs_lookup_path_w_sep(self, parent, path, sep, prefix, false)
       return ret ~= 0 and ret or nil
     end,
     lookup_symbol = function (self, symbol)
-      local ret = ffi.C.ecs_lookup_symbol(self, symbol, true, false)
+      local ret = c.ecs_lookup_symbol(self, symbol, true, false)
       return ret ~= 0 and ret or nil
     end,
     set_alias = function (self, entity, name)
-      ffi.C.ecs_set_alias(self, entity, name)
+      c.ecs_set_alias(self, entity, name)
     end,
     has = function (self, entity, arg1, arg2)
       if entity and arg1 and arg2 then
         return ecs_has_pair(self, entity, arg1, arg2)
       else
-        return ffi.C.ecs_has_id(self, entity, arg1)
+        return c.ecs_has_id(self, entity, arg1)
       end
     end,
     owns = function (self, entity, id)
-      return ffi.C.ecs_owns_id(self, entity, id)
+      return c.ecs_owns_id(self, entity, id)
     end,
     is_alive = function (self, entity)
-      return ffi.C.ecs_is_alive(self, entity)
+      return c.ecs_is_alive(self, entity)
     end,
     is_valid = function (self, entity)
-      return ffi.C.ecs_is_valid(self, entity)
+      return c.ecs_is_valid(self, entity)
     end,
     alive = function (self, entity)
-      local ret = ffi.C.ecs_get_alive(self, entity)
+      local ret = c.ecs_get_alive(self, entity)
       return ret
     end,
     make_alive = function (self, entity)
-      ffi.C.ecs_make_alive(self, entity)
+      c.ecs_make_alive(self, entity)
     end,
     exists = function (self, entity)
-      return ffi.C.ecs_exists(self, entity)
+      return c.ecs_exists(self, entity)
     end,
     add = function (self, entity, arg1, arg2)
       if entity and arg1 and arg2 then
         ecs_add_pair(self, entity, arg1, arg2)
       else
-        ffi.C.ecs_add_id(self, entity, arg1)
+        c.ecs_add_id(self, entity, arg1)
       end
     end,
     remove = function (self, entity, arg1, arg2)
       if arg1 and arg2 then
         ecs_remove_pair(self, entity, arg1, arg2)
       else
-        ffi.C.ecs_remove_id(self, entity, arg1)
+        c.ecs_remove_id(self, entity, arg1)
       end
     end,
     clear = function (self, entity)
-      ffi.C.ecs_clear(self, entity)
+      c.ecs_clear(self, entity)
     end,
     enable = function (self, entity, component)
       if component then
-        ffi.C.ecs_enable_id(self, entity, component, true)
+        c.ecs_enable_id(self, entity, component, true)
       else
-        ffi.C.ecs_enable(self, entity, true)
+        c.ecs_enable(self, entity, true)
       end
     end,
     disable = function (self, entity, component)
       if component then
-        ffi.C.ecs_enable_id(self, entity, component, false)
+        c.ecs_enable_id(self, entity, component, false)
       else
-        ffi.C.ecs_enable(self, entity, false)
+        c.ecs_enable(self, entity, false)
       end
     end,
     count = function (self, entity)
-      return ffi.C.ecs_count_id(self, entity)
+      return c.ecs_count_id(self, entity)
     end,
     delete_children = function (self, parent)
-      ffi.C.ecs_delete_with(self, ecs_pair(ffi.C.EcsChildOf, parent))
+      c.ecs_delete_with(self, ecs_pair(c.EcsChildOf, parent))
     end,
     parent = function (self, entity)
-      local ret = ffi.C.ecs_get_target(self, entity, ffi.C.EcsChildOf, 0)
+      local ret = c.ecs_get_target(self, entity, c.EcsChildOf, 0)
       return ret
     end,
     is_component_enabled = function (self, entity, component)
-      return ffi.C.ecs_is_enabled_id(self, entity, component)
+      return c.ecs_is_enabled_id(self, entity, component)
     end,
     pair = function (predicate, object)
       return ecs_pair(predicate, object)
@@ -439,31 +514,31 @@ ffi.metatype('ecs_world_t', {
       return ecs_pair_target(self, pair)
     end,
     add_is_a = function (self, entity, base)
-      ecs_add_pair(self, entity, ffi.C.EcsIsA, base)
+      ecs_add_pair(self, entity, c.EcsIsA, base)
     end,
     remove_is_a = function (self, entity, base)
-      ecs_remove_pair(self, entity, ffi.C.EcsIsA, base)
+      ecs_remove_pair(self, entity, c.EcsIsA, base)
     end,
     add_child_of = function (self, entity, parent)
-      ecs_add_pair(self, entity, ffi.C.EcsChildOf, parent)
+      ecs_add_pair(self, entity, c.EcsChildOf, parent)
     end,
     remove_child_of = function (self, entity, parent)
-      ecs_remove_pair(self, entity, ffi.C.EcsChildOf, parent)
+      ecs_remove_pair(self, entity, c.EcsChildOf, parent)
     end,
     auto_override = function (self, entity, component)
-      ffi.C.ecs_add_id(self, entity, bit.bor(ffi.C.ECS_AUTO_OVERRIDE, component))
+      c.ecs_add_id(self, entity, bit.bor(c.ECS_AUTO_OVERRIDE, component))
     end,
     new_enum = function (self, name, description)
-      if ffi.C.ecs_lookup(self, name) ~= 0 then
+      if c.ecs_lookup(self, name) ~= 0 then
         error('Component already exists.', 2)
       end
 
-      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      local component = c.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
       if component == 0 then
         return
       end
-      ffi.C.ecs_set_name(self, component, name)
-      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsEnumType, description) ~= 0 then
+      c.ecs_set_name(self, component, name)
+      if c.ecs_meta_from_desc(self, component, c.EcsEnumType, description) ~= 0 then
         error('Invalid descriptor.', 2)
       end
 
@@ -471,16 +546,16 @@ ffi.metatype('ecs_world_t', {
       return component
     end,
     new_bitmask = function (self, name, description)
-      if ffi.C.ecs_lookup(self, name) ~= 0 then
+      if c.ecs_lookup(self, name) ~= 0 then
         error('Component already exists.', 2)
       end
 
-      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      local component = c.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
       if component == 0 then
         return
       end
-      ffi.C.ecs_set_name(self, component, name)
-      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsBitmaskType, description) ~= 0 then
+      c.ecs_set_name(self, component, name)
+      if c.ecs_meta_from_desc(self, component, c.EcsBitmaskType, description) ~= 0 then
         error('Invalid descriptor.', 2)
       end
 
@@ -492,15 +567,15 @@ ffi.metatype('ecs_world_t', {
         error(string.format('Element count out of range (%f)', count), 2)
       end
 
-      if ffi.C.ecs_lookup(self, name) ~= 0 then
+      if c.ecs_lookup(self, name) ~= 0 then
         error('Component already exists.', 2)
       end
 
-      local component = ffi.C.ecs_array_init(self, ecs_array_desc_t({ type = element, count = count }))
+      local component = c.ecs_array_init(self, ecs_array_desc_t({ type = element, count = count }))
       if component == 0 then
         return
       end
-      ffi.C.ecs_set_name(self, component, name)
+      c.ecs_set_name(self, component, name)
 
       init_scope(self, component)
       return component
@@ -508,83 +583,74 @@ ffi.metatype('ecs_world_t', {
     new_struct = function (self, name, description)
       check_c_identifier(name)
 
-      if ffi.C.ecs_lookup(self, name) ~= 0 then
+      if c.ecs_lookup(self, name) ~= 0 then
         error('Component already exists.', 2)
       end
 
       local flecs_definition, c_definition = generate_definitions(description)
 
-      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      local component = c.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
       if component == 0 then
         return
       end
-      ffi.C.ecs_set_name(self, component, name)
-      if ffi.C.ecs_meta_from_desc(self, component, ffi.C.EcsStructType, flecs_definition) ~= 0 then
+      c.ecs_set_name(self, component, name)
+      if c.ecs_meta_from_desc(self, component, c.EcsStructType, flecs_definition) ~= 0 then
         error('Invalid descriptor.', 2)
       end
 
-      ffi.C.ecs_set_id(self, component, ffi.C.FLECS_IDEcsTypeID_, ffi.sizeof(EcsType), EcsType({ kind = ffi.C.EcsStructType }))
+      c.ecs_set_id(self, component, c.FLECS_IDEcsTypeID_, ffi.sizeof(EcsType), EcsType({ kind = c.EcsStructType }))
 
-      local path = ffi.C.ecs_get_path_w_sep(self, 0, component, '_', nil)
+      local path = c.ecs_get_path_w_sep(self, 0, component, '_', nil)
       local c_identifier = ffi.string(path) .. '_' .. c_identifier_sequence
       c_identifier_sequence = c_identifier_sequence + 1
-      ffi.C.free(path)
+      c.ecs_os_api.free_(path)
 
-      local success, error_message = pcall(function()
+      local success, error_message = pcall(function ()
         ffi.cdef('typedef struct ' .. c_identifier .. c_definition .. c_identifier)
       end)
       if not success then
-        ffi.C.ecs_delete(self, component)
+        c.ecs_delete(self, component)
         error(error_message, 2)
       end
-      local component_ctypes = worlds[self].component_ctypes
-      -- In LuaJIT, uint64_t is boxed in a cdata object. And every time you make a new uint64_t by any means,
-      -- you get a different cdata object, which counts as a different table index!
-      -- Therefore, the quick, easy and correct workaround is to convert the component ID to string
-      -- and use that instead.
-      -- https://luajit.org/ext_ffi_semantics.html#cdata_key
-      component_ctypes[tostring(component)] = {
-        struct = ffi.typeof(c_identifier),
-        ptr = ffi.typeof(c_identifier .. '*'),
-        const_ptr = ffi.typeof('const ' .. c_identifier .. '*'),
-        size = ffi.sizeof(c_identifier),
-      }
+      local component_c_types = ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(self)).component_c_types
+      c.ecs_map_insert(component_c_types, component, ffi.cast(uint64_t, c.ecs_os_api.strdup_(c_identifier)))
 
       ffi.metatype(c_identifier, {
         __tostring = function (this)
-          local ptr = ffi.C.ecs_ptr_to_expr(self, component, this)
+          local ptr = c.ecs_ptr_to_expr(self, component, this)
           local result = ffi.string(ptr)
-          ffi.C.free(ptr)
+          c.ecs_os_api.free_(ptr)
           return result
-        end
+        end,
+        __metatable = nil,
       })
 
       init_scope(self, component)
       return component
     end,
     new_alias = function (self, name, alias)
-      local type_entity = ffi.C.ecs_lookup(self, name)
+      local type_entity = c.ecs_lookup(self, name)
       if type_entity == 0 then
         error('Component does not exist.', 2)
       end
 
-      if not ffi.C.ecs_has_id(self, type_entity, ffi.C.FLECS_IDEcsComponentID_) then
+      if not c.ecs_has_id(self, type_entity, c.FLECS_IDEcsComponentID_) then
         error('Not a component,', 2)
       end
 
-      if ffi.C.ecs_get_id(self, type_entity, ffi.C.FLECS_IDEcsTypeID_) == nil then
+      if c.ecs_get_id(self, type_entity, c.FLECS_IDEcsTypeID_) == nil then
         error('Missing descriptor.', 2)
       end
 
-      if ffi.C.ecs_lookup(self, alias) ~= 0 then
+      if c.ecs_lookup(self, alias) ~= 0 then
         error('Alias already exists.', 2)
       end
 
-      local component = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
+      local component = c.ecs_entity_init(self, ecs_entity_desc_t({ use_low_id = true }))
       if component == 0 then
         return
       end
-      ffi.C.ecs_set_name(self, component, alias)
+      c.ecs_set_name(self, component, alias)
       -- TODO: Should we copy components?
 
       init_scope(self, component)
@@ -593,17 +659,17 @@ ffi.metatype('ecs_world_t', {
     new_prefab = function (self, id, expression)
       local entity
       if not id then
-        entity = ffi.C.ecs_new(self)
-        local scope = ffi.C.ecs_get_scope(self)
+        entity = c.ecs_new(self)
+        local scope = c.ecs_get_scope(self)
         if scope ~= 0 then
-          ecs_add_pair(self, entity, ffi.C.EcsChildOf, scope)
+          ecs_add_pair(self, entity, c.EcsChildOf, scope)
         end
-        ffi.C.ecs_add_id(self, entity, ffi.C.EcsPrefab)
+        c.ecs_add_id(self, entity, c.EcsPrefab)
       else
-        entity = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({
+        entity = c.ecs_entity_init(self, ecs_entity_desc_t({
           name = id,
           add_expr = expression,
-          add = uint64_t_vla(2, { ffi.C.EcsPrefab, 0 }),
+          add = uint64_t_vla(2, { c.EcsPrefab, 0 }),
         }))
       end
 
@@ -613,29 +679,36 @@ ffi.metatype('ecs_world_t', {
     -- Client code should have no access to pointers, references, or arrays.
     -- And, since we're returning a copy here, there's no need for a get_mut function.
     get = function (self, entity, component)
-      local data = ffi.C.ecs_get_id(self, entity, component)
+      local data = c.ecs_get_id(self, entity, component)
       if data == nil then
         return
       end
 
-      local ctype = worlds[self].component_ctypes[tostring(component)]
-      if not ctype then
+      local ctype = c.ecs_map_get(
+        ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(self)).component_c_types,
+        component)
+      if ctype == nil then
         error('Component ' .. self:name(component, true) .. " does not exist or it's missing serialization data.", 2)
       end
+      ctype = ffi.string(ffi.cast(char_ptr_ptr, ctype)[0])
 
-      return ctype.struct(ffi.cast(ctype.const_ptr, data)[0])
+      return ffi.new(ctype, (ffi.cast(ctype .. '*', data)[0]))
     end,
     -- TODO: Get ref.
     set = function (self, entity, component, value)
       if not value then
         error('Value must not be nil', 2)
       end
-      local ctype = worlds[self].component_ctypes[tostring(component)]
-      if not ctype then
+
+      local ctype = c.ecs_map_get(
+        ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(self)).component_c_types,
+        component)
+      if ctype == nil then
         error('Component ' .. self:name(component, true) .. " does not exist or it's missing serialization data.", 2)
       end
+      ctype = ffi.string(ffi.cast(char_ptr_ptr, ctype)[0])
 
-      ffi.C.ecs_set_id(self, entity, component, ctype.size, type(value) == 'table' and ctype.struct(value) or value)
+      c.ecs_set_id(self, entity, component, ffi.sizeof(ctype), type(value) == 'table' and ffi.new(ctype, value) or value)
     end,
     singleton_add = function (self, component)
       self:add(component, component)
@@ -651,6 +724,59 @@ ffi.metatype('ecs_world_t', {
         error('Value must not be nil', 2)
       end
       self:set(component, component, value)
+    end,
+    query = function (self, query_or_description)
+      local description
+      local wrapper = query_wrapper_t_ptr(c.ecs_os_api.malloc_(ffi.sizeof(query_wrapper_t)))
+
+      if type(query_or_description) == 'string' then
+        description = ecs_query_desc_t({
+          expr = query_or_description,
+          binding_ctx = wrapper,
+        })
+        -- Queries without an associated entity don't have their binding_ctx_free function called
+        -- upon world destruction. Do it ourselves with this mechanism.
+        c.ecs_map_insert(
+          ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(self)).alive_queries,
+          ffi.cast(uint64_t, wrapper),
+          0)
+      else
+        -- Clear dangerous, unreviewed or unimplemented fields.
+        query_or_description._canary = 0;
+        query_or_description.flags = 0;
+        query_or_description.order_by_callback = nil;
+        query_or_description.order_by_table_callback = nil;
+        query_or_description.order_by = nil;
+        query_or_description.group_by = nil;
+        query_or_description.group_by_callback = nil;
+        query_or_description.on_group_create = nil;
+        query_or_description.on_group_delete = nil;
+        query_or_description.group_by_ctx = nil;
+        query_or_description.group_by_ctx_free = nil;
+        query_or_description.ctx = nil;
+        query_or_description.ctx_free = nil;
+
+        -- Setup our binding context.
+        query_or_description.binding_ctx = wrapper
+        if not query_or_description.entity or query_or_description.entity == 0 then
+          c.ecs_map_insert(
+            ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(self)).alive_queries,
+            ffi.cast(uint64_t, wrapper),
+            0)
+        else
+          query_or_description.binding_ctx_free = invalidate_query_wrapper
+        end
+
+        description = ecs_query_desc_t(query_or_description)
+
+        -- Clear dangerous stuff once again before handing it back to the user.
+        query_or_description.binding_ctx = nil
+        query_or_description.binding_ctx_free = nil
+      end
+
+      wrapper.query = c.ecs_query_init(self, description)
+
+      return ffi.gc(ffi.cast(public_ecs_query_t_ptr, wrapper), finish_query_wrapper)
     end,
   },
   __tostring = function (self)
@@ -893,26 +1019,152 @@ ffi.metatype(ecs_metric_t, {
   __metatable = nil,
 })
 
-local function register_world(world)
-  worlds[world] = {
-    component_ctypes = {},
-  }
+local function finish_iter_wrapper(wrapper)
+  wrapper = ffi.cast(iter_wrapper_t_ptr, wrapper)
+  if not wrapper.invalid then
+    c.ecs_map_remove(
+      ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(wrapper.iter.world)).alive_iterators,
+      ffi.cast(uint64_t, wrapper))
+    c.ecs_iter_fini(wrapper.iter)
+  end
+  c.ecs_os_api.free_(wrapper)
+end
+
+local function invalidate_iter_wrapper(wrapper)
+  ffi.cast(iter_wrapper_t_ptr, ffi.cast(ecs_iter_t_ptr, wrapper).binding_ctx).invalid = true
+end
+
+ffi.metatype(public_ecs_query_t, {
+  __index = {
+    iter = function (self)
+      local query_wrapper = ffi.cast(query_wrapper_t_ptr, self)
+      if query_wrapper.query == nil then
+        error('The query has been finished.', 2)
+      end
+
+      local world = query_wrapper.query.world
+
+      local wrapper = ffi.cast(
+        iter_wrapper_t_ptr,
+        c.ecs_os_api.malloc_(ffi.sizeof(iter_wrapper_t)))
+      wrapper.iter = c.ecs_query_iter(world, query_wrapper.query)
+      wrapper.iter.binding_ctx = wrapper
+      wrapper.iter.fini = invalidate_iter_wrapper
+      wrapper.i = 0
+      wrapper.invalid = false
+
+      c.ecs_map_insert(
+        ffi.cast(world_binding_context_t_ptr, c.ecs_get_binding_ctx(world)).alive_iterators,
+        ffi.cast(uint64_t, wrapper),
+        0)
+
+      return ffi.gc(ffi.cast(public_ecs_iter_t_ptr, wrapper), finish_iter_wrapper)
+    end,
+  },
+  is_valid = function ()
+    local query_wrapper = ffi.cast(query_wrapper_t_ptr, self)
+    return query_wrapper.query ~= nil
+  end,
+  __tostring = function (self)
+    local query_wrapper = ffi.cast(query_wrapper_t_ptr, self)
+    if query_wrapper.query == nil then
+      return 'Invalid query.'
+    end
+
+    local ptr = c.ecs_query_str(query_wrapper.query)
+    local result = ffi.string(ptr)
+    c.ecs_os_api.free_(ptr)
+    return result
+  end,
+  __metatable = nil,
+})
+
+ffi.metatype(public_ecs_iter_t, {
+  __tostring = function (self)
+    local wrapper = ffi.cast(iter_wrapper_t_ptr, self)
+    if wrapper.invalid then
+      return 'Invalid iterator.'
+    end
+    return 'Iterator for query: ' .. tostring(ffi.cast(public_ecs_query_t_ptr, wrapper.iter.query.binding_ctx))
+  end,
+  is_valid = function (self)
+    local iter_wrapper = ffi.cast(iter_wrapper_t_ptr, self)
+    return not iter_wrapper.invalid
+  end,
+  __metatable = nil,
+})
+
+local function finish_world_binding_context(binding_context)
+  binding_context = ffi.cast(world_binding_context_t_ptr, binding_context)
+
+  -- Free all contained strings.
+  local iter = ecs_map_iter_t_vla(1)
+  iter[0] = c.ecs_map_iter(binding_context.component_c_types)
+  while c.ecs_map_next(iter) do
+    c.ecs_os_api.free_(ffi.cast(void_ptr, iter[0].res[1]))
+  end
+
+  -- Finish all alive queries.
+  iter[0] = c.ecs_map_iter(binding_context.alive_queries)
+  while c.ecs_map_next(iter) do
+    local wrapper = ffi.cast(query_wrapper_t_ptr, iter[0].res[0])
+    c.ecs_query_fini(wrapper.query)
+    wrapper.query = nil
+  end
+
+  -- Finish all alive iterators.
+  iter[0] = c.ecs_map_iter(binding_context.alive_iterators)
+  while c.ecs_map_next(iter) do
+    local wrapper = ffi.cast(iter_wrapper_t_ptr, iter[0].res[0])
+    c.ecs_iter_fini(wrapper.iter)
+    wrapper.invalid = true
+  end
+
+  c.ecs_map_fini(binding_context.component_c_types)
+  c.ecs_map_fini(binding_context.alive_queries)
+  c.ecs_map_fini(binding_context.alive_iterators)
+  c.ecs_os_api.free_(binding_context)
+end
+
+local function init_world(world)
+  local binding_context = ffi.cast(
+    world_binding_context_t_ptr,
+    c.ecs_os_api.malloc_(ffi.sizeof(world_binding_context_t)))
+  c.ecs_map_init(binding_context.component_c_types, nil)
+  c.ecs_map_init(binding_context.alive_iterators, nil)
+  c.ecs_map_init(binding_context.alive_queries, nil)
+  c.ecs_set_binding_ctx(world, binding_context, finish_world_binding_context)
   return world
 end
 
 local function finish_world(world)
-  worlds[world] = nil
-  ffi.C.ecs_fini(world)
+  c.ecs_fini(world)
 end
 
 local ret = {}
 
 function ret.init()
-  return ffi.gc(register_world(ffi.C.ecs_init()), finish_world)
+  return ffi.gc(init_world(c.ecs_init()), finish_world)
 end
 
 function ret.mini()
-  return ffi.gc(register_world(ffi.C.ecs_mini()), finish_world)
+  return ffi.gc(init_world(c.ecs_mini()), finish_world)
 end
+
+ret.inout = {
+  default = c.EcsInOutDefault,
+  none = c.EcsInOutNone,
+  filter = c.EcsInOutFilter,
+  inout = c.EcsInOut,
+  in_ = c.EcsIn,
+  out = c.EcsOut,
+}
+
+ret.cache = {
+  default = c.EcsQueryCacheDefault,
+  auto = c.EcsQueryCacheAuto,
+  all = c.EcsQueryCacheAll,
+  none = c.EcsQueryCacheNone,
+}
 
 return ret

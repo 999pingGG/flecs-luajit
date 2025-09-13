@@ -235,4 +235,31 @@ for i = 1, 10 do
   print('Velocity: ' .. tostring(world:get(entities[i], velocity)))
 end
 
+local query = world:query 'Translation'
+print('My simple query is ' .. tostring(query))
+
+query = world:query 'Translation, [out] Velocity'
+print('Another query is '.. tostring(query))
+
+query = world:query({
+  terms = {
+    {
+      id = translation,
+      inout = ecs.inout.inout,
+    },
+    {
+      id = velocity,
+      inout = ecs.inout.in_,
+    },
+  },
+})
+print('A query defined manually is ' .. tostring(query))
+
+local it = query:iter()
+print(it)
+
+for translation, velocity in it do
+  print(translation, velocity)
+end
+
 print 'All tests passed successfully!'
