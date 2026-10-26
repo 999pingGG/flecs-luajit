@@ -1,5 +1,5 @@
 #!/bin/bash
-flecs_header='./libs/flecs/flecs.h'
+flecs_header='./vendor/flecs/flecs.h'
 lua_source='./src/ecs.lua'
 output_directory='./distr'
 

@@ -1,7 +1,7 @@
 @echo off
 setlocal ENABLEDELAYEDEXPANSION
 
-set flecs_header=.\libs\flecs\flecs.h
+set flecs_header=.\vendor\flecs\flecs.h
 set lua_source=.\src\ecs.lua
 set output_directory=.\distr
 
