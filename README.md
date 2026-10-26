@@ -8,7 +8,7 @@ implemented yet. Based on [https://github.com/flecs-hub/flecs-lua/]()
 
 ## How to build and run the tests
 
-- Do a standard CMake build. This will automagically run `utils/preprocess.sh or utils/preprocess.ps1` having the project root as the
+- Do a standard CMake build. This will automagically run `tools/preprocess.sh or tools/preprocess.ps1` having the project root as the
 current working directory every time the Lua source or the Flecs header change. The script generates the FFI cdefs for
 Flecs from `vendor/flecs/flecs.h`, appends `src/ecs.lua` and generates the final Lua file, ready to use, in
 `distr/ecs.lua`. In W\*ndows, you need PowerShell and `cl.exe` available in your `PATH`, for example by executing it in
@@ -34,9 +34,9 @@ table.
 
 ## Configuration
 
-When running `utils/preprocess.sh`, any arguments you pass will be forwarded to `cc`. Therefore, you are able to
+When running `tools/preprocess.sh`, any arguments you pass will be forwarded to `cc`. Therefore, you are able to
 customize Flecs' macros. Notably, you can customize `ecs_float_t` and `ecs_ftime_t` to use double precision, for
-example with `./utils/preprocess.sh -Decs_ftime_t=double -Decs_float_t=double`. You MUST make sure to preprocess and
+example with `./tools/preprocess.sh -Decs_ftime_t=double -Decs_float_t=double`. You MUST make sure to preprocess and
 compile `flecs.c` with the same definitions, otherwise chaos will ensue!
 
 ## Caveats

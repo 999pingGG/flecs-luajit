@@ -21,16 +21,16 @@ endif()
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT flecs_luajit)
 
 set(PREPROCESS_DEPS
-  ${CMAKE_SOURCE_DIR}/utils/preprocess.ps1
-  ${CMAKE_SOURCE_DIR}/utils/preprocess.sh
+  ${CMAKE_SOURCE_DIR}/tools/preprocess.ps1
+  ${CMAKE_SOURCE_DIR}/tools/preprocess.sh
   ${CMAKE_SOURCE_DIR}/vendor/flecs/flecs.h
   ${CMAKE_SOURCE_DIR}/src/ecs.lua
   ${CMAKE_SOURCE_DIR}/src/tests.lua)
 
 if(WIN32)
-  set(PREPROCESS_COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File .\\utils\\preprocess.ps1)
+  set(PREPROCESS_COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File .\\tools\\preprocess.ps1)
 else()
-  set(PREPROCESS_COMMAND ./utils/preprocess.sh)
+  set(PREPROCESS_COMMAND ./tools/preprocess.sh)
 endif()
 
 add_custom_command(
