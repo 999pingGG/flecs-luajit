@@ -3,10 +3,6 @@ local ffi = require 'ffi'
 local buffer = require 'string.buffer'
 local table = table
 
-ffi.cdef[[
-void free(void *ptr);
-]]
-
 local ecs_world_info_t = ffi.typeof 'ecs_world_info_t'
 local ecs_world_stats_t = ffi.typeof 'ecs_world_stats_t'
 local ecs_metric_t = ffi.typeof 'ecs_metric_t'
@@ -330,7 +326,7 @@ ffi.metatype('ecs_world_t', {
     path = function (self, entity)
       local path = ecs_get_path(self, entity)
       local ret = ffi.string(path)
-      ffi.C.free(path)
+      ffi.C.ecs_os_api.free_(path)
       return ret
     end,
     lookup = function (self, path)
@@ -521,7 +517,7 @@ ffi.metatype('ecs_world_t', {
       local path = ffi.C.ecs_get_path_w_sep(self, 0, component, '_', nil)
       local c_identifier = ffi.string(path) .. '_' .. c_identifier_sequence
       c_identifier_sequence = c_identifier_sequence + 1
-      ffi.C.free(path)
+      ffi.C.ecs_os_api.free_(path)
 
       local success, error_message = pcall(function()
         ffi.cdef('typedef struct ' .. c_identifier .. c_definition .. c_identifier)
@@ -547,7 +543,7 @@ ffi.metatype('ecs_world_t', {
         __tostring = function (this)
           local ptr = ffi.C.ecs_ptr_to_expr(self, component, this)
           local result = ffi.string(ptr)
-          ffi.C.free(ptr)
+          ffi.C.ecs_os_api.free_(ptr)
           return result
         end
       })

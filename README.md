@@ -39,11 +39,6 @@ customize Flecs' macros. Notably, you can customize `ecs_float_t` and `ecs_ftime
 example with `./tools/preprocess.sh -Decs_ftime_t=double -Decs_float_t=double`. You MUST make sure to preprocess and
 compile `flecs.c` with the same definitions, otherwise chaos will ensue!
 
-## Caveats
-
-This library uses `ffi.C.free()` to release the memory allocated and returned by Flecs, so don't pass custom memory
-management functions to Flecs (for example, by using `ecs_os_set_api()`)! This unsafe operation is not yet implemented.
-
 ## TODO
 - Ensure the library is more or less safe to expose to third-party code, like mods.
 - Allow for custom `ecs_os_api_t`.
