@@ -1,4 +1,4 @@
-require('ffi').cdef[[
+﻿require('ffi').cdef[[
 typedef uint8_t ecs_flags8_t;
 typedef uint16_t ecs_flags16_t;
 typedef uint32_t ecs_flags32_t;
@@ -79,10 +79,6 @@ ecs_vec_t ecs_vec_copy(
     struct ecs_allocator_t *allocator,
     const ecs_vec_t *vec,
     ecs_size_t size);
-ecs_vec_t ecs_vec_copy_shrink(
-    struct ecs_allocator_t *allocator,
-    const ecs_vec_t *vec,
-    ecs_size_t size);
 void ecs_vec_reclaim(
     struct ecs_allocator_t *allocator,
     ecs_vec_t *vec,
@@ -97,12 +93,6 @@ void ecs_vec_set_min_size(
     ecs_vec_t *vec,
     ecs_size_t size,
     int32_t elem_count);
-void ecs_vec_set_min_size_w_type_info(
-    struct ecs_allocator_t *allocator,
-    ecs_vec_t *vec,
-    ecs_size_t size,
-    int32_t elem_count,
-    const ecs_type_info_t *ti);
 void ecs_vec_set_min_count(
     struct ecs_allocator_t *allocator,
     ecs_vec_t *vec,
@@ -148,6 +138,10 @@ void* ecs_vec_first(
 void* ecs_vec_last(
     const ecs_vec_t *vec,
     ecs_size_t size);
+typedef struct ecs_sparse_page_t {
+    int32_t *sparse;
+    void *data;
+} ecs_sparse_page_t;
 typedef struct ecs_sparse_t {
     ecs_vec_t dense;
     ecs_vec_t pages;
@@ -193,14 +187,15 @@ int32_t flecs_sparse_count(
 bool flecs_sparse_has(
     const ecs_sparse_t *sparse,
     uint64_t id);
-void* flecs_sparse_get(
+ void* flecs_sparse_get(
     const ecs_sparse_t *sparse,
     ecs_size_t elem_size,
     uint64_t id);
-void* flecs_sparse_insert(
-    ecs_sparse_t *sparse,
+ void* flecs_sparse_get_w_check(
+    const ecs_sparse_t *sparse,
     ecs_size_t elem_size,
-    uint64_t id);
+    uint64_t id,
+    bool checked);
 void* flecs_sparse_ensure(
     ecs_sparse_t *sparse,
     ecs_size_t elem_size,
@@ -214,24 +209,6 @@ const uint64_t* flecs_sparse_ids(
     const ecs_sparse_t *sparse);
 void flecs_sparse_shrink(
     ecs_sparse_t *sparse);
-void ecs_sparse_init(
-    ecs_sparse_t *sparse,
-    ecs_size_t elem_size);
-void* ecs_sparse_add(
-    ecs_sparse_t *sparse,
-    ecs_size_t elem_size);
-uint64_t ecs_sparse_last_id(
-    const ecs_sparse_t *sparse);
-int32_t ecs_sparse_count(
-    const ecs_sparse_t *sparse);
-void* ecs_sparse_get_dense(
-    const ecs_sparse_t *sparse,
-    ecs_size_t elem_size,
-    int32_t index);
-void* ecs_sparse_get(
-    const ecs_sparse_t *sparse,
-    ecs_size_t elem_size,
-    uint64_t id);
 typedef struct ecs_map_t ecs_map_t;
 typedef struct ecs_block_allocator_block_t {
     void *memory;
@@ -251,11 +228,7 @@ typedef struct ecs_block_allocator_t {
 void flecs_ballocator_init(
     ecs_block_allocator_t *ba,
     ecs_size_t size);
-ecs_block_allocator_t* flecs_ballocator_new(
-    ecs_size_t size);
 void flecs_ballocator_fini(
-    ecs_block_allocator_t *ba);
-void flecs_ballocator_free(
     ecs_block_allocator_t *ba);
 void* flecs_balloc(
     ecs_block_allocator_t *allocator);
@@ -283,9 +256,6 @@ void* flecs_brealloc_w_dbg_info(
     ecs_block_allocator_t *src,
     void *memory,
     const char *type_name);
-void* flecs_bdup(
-    ecs_block_allocator_t *ba,
-    void *memory);
 typedef struct ecs_stack_page_t {
     void *data;
     struct ecs_stack_page_t *next;
@@ -304,6 +274,7 @@ typedef struct ecs_stack_t {
     ecs_stack_page_t *tail_page;
     ecs_stack_cursor_t *tail_cursor;
     int32_t cursor_count;
+    int32_t oversized_count;
 } ecs_stack_t;
 void flecs_stack_init(
     ecs_stack_t *stack);
@@ -324,6 +295,11 @@ void flecs_stack_reset(
     ecs_stack_t *stack);
 ecs_stack_cursor_t* flecs_stack_get_cursor(
     ecs_stack_t *stack);
+ecs_stack_cursor_t* flecs_stack_get_cursor_w_alloc(
+    ecs_stack_t *stack,
+    ecs_size_t size,
+    ecs_size_t align,
+    void **data_out);
 void flecs_stack_restore_cursor(
     ecs_stack_t *stack,
     ecs_stack_cursor_t *cursor);
@@ -344,34 +320,24 @@ struct ecs_map_t {
     unsigned count : 26;
     unsigned bucket_shift : 6;
     struct ecs_allocator_t *allocator;
+    int32_t change_count;
+    ecs_map_key_t last_iterated;
 };
 typedef struct ecs_map_iter_t {
     const ecs_map_t *map;
     ecs_bucket_t *bucket;
     ecs_bucket_entry_t *entry;
     ecs_map_data_t *res;
+    int32_t change_count;
 } ecs_map_iter_t;
-typedef struct ecs_map_params_t {
-    struct ecs_allocator_t *allocator;
-    struct ecs_block_allocator_t entry_allocator;
-} ecs_map_params_t;
-void ecs_map_params_init(
-    ecs_map_params_t *params,
-    struct ecs_allocator_t *allocator);
-void ecs_map_params_fini(
-    ecs_map_params_t *params);
 void ecs_map_init(
     ecs_map_t *map,
     struct ecs_allocator_t *allocator);
-void ecs_map_init_w_params(
-    ecs_map_t *map,
-    ecs_map_params_t *params);
 void ecs_map_init_if(
     ecs_map_t *map,
     struct ecs_allocator_t *allocator);
-void ecs_map_init_w_params_if(
-    ecs_map_t *result,
-    ecs_map_params_t *params);
+void ecs_map_reclaim(
+    ecs_map_t *map);
 void ecs_map_fini(
     ecs_map_t *map);
 ecs_map_val_t* ecs_map_get(
@@ -405,6 +371,8 @@ void ecs_map_clear(
     ecs_map_t *map);
 ecs_map_iter_t ecs_map_iter(
     const ecs_map_t *map);
+bool ecs_map_iter_valid(
+    ecs_map_iter_t *iter);
 bool ecs_map_next(
     ecs_map_iter_t *iter);
 void ecs_map_copy(
@@ -513,10 +481,10 @@ typedef struct ecs_time_t {
     uint32_t sec;
     uint32_t nanosec;
 } ecs_time_t;
-extern int64_t ecs_os_api_malloc_count;
-extern int64_t ecs_os_api_realloc_count;
-extern int64_t ecs_os_api_calloc_count;
-extern int64_t ecs_os_api_free_count;
+ extern int64_t ecs_os_api_malloc_count;
+ extern int64_t ecs_os_api_realloc_count;
+ extern int64_t ecs_os_api_calloc_count;
+ extern int64_t ecs_os_api_free_count;
 typedef uintptr_t ecs_os_thread_t;
 typedef uintptr_t ecs_os_cond_t;
 typedef uintptr_t ecs_os_mutex_t;
@@ -631,6 +599,19 @@ void (*ecs_os_api_dlclose_t)(
 typedef
 char* (*ecs_os_api_module_to_path_t)(
     const char *module_id);
+typedef
+void* (*ecs_os_api_fopen_t)(
+    const char *file,
+    const char *mode);
+typedef
+void (*ecs_os_api_fclose_t)(
+    void *file);
+typedef
+size_t (*ecs_os_api_fread_t)(
+    void *ptr,
+    size_t size,
+    size_t count,
+    void *file);
 typedef void (*ecs_os_api_perf_trace_t)(
     const char *filename,
     size_t line,
@@ -671,6 +652,9 @@ typedef struct ecs_os_api_t {
     ecs_os_api_dlclose_t dlclose_;
     ecs_os_api_module_to_path_t module_to_dl_;
     ecs_os_api_module_to_path_t module_to_etc_;
+    ecs_os_api_fopen_t fopen_;
+    ecs_os_api_fclose_t fclose_;
+    ecs_os_api_fread_t fread_;
     ecs_os_api_perf_trace_t perf_trace_push_;
     ecs_os_api_perf_trace_t perf_trace_pop_;
     int32_t log_level_;
@@ -712,6 +696,8 @@ const char* ecs_os_strerror(
 void ecs_os_strset(
     char **str,
     const char *value);
+char* ecs_os_strdup_(
+    const char *str);
 void ecs_os_perf_trace_push_(
     const char *file,
     size_t line,
@@ -809,6 +795,10 @@ typedef bool (*ecs_equals_t)(
     const void *a_ptr,
     const void *b_ptr,
     const ecs_type_info_t *type_info);
+typedef bool (*ecs_on_validate_t)(
+    ecs_world_t *world,
+    ecs_entity_t entity,
+    void *ptr);
 typedef void (*flecs_poly_dtor_t)(
     ecs_poly_t *poly);
 typedef enum ecs_inout_kind_t {
@@ -873,14 +863,14 @@ struct ecs_query_t {
     void *ctx;
     void *binding_ctx;
     ecs_entity_t entity;
-    ecs_world_t *real_world;
+    ecs_world_t *stage;
     ecs_world_t *world;
     int32_t eval_count;
 };
 struct ecs_observer_t {
     ecs_header_t hdr;
     ecs_query_t *query;
-    ecs_entity_t events[(8)];
+    ecs_entity_t events[8];
     int32_t event_count;
     ecs_iter_action_t callback;
     ecs_run_action_t run;
@@ -910,6 +900,7 @@ struct ecs_type_hooks_t {
     ecs_iter_action_t on_set;
     ecs_iter_action_t on_remove;
     ecs_iter_action_t on_replace;
+    ecs_on_validate_t on_validate;
     void *ctx;
     void *binding_ctx;
     void *lifecycle_ctx;
@@ -923,6 +914,7 @@ struct ecs_type_info_t {
     ecs_type_hooks_t hooks;
     ecs_entity_t component;
     const char *name;
+    int32_t refcount;
 };
 typedef struct ecs_data_t ecs_data_t;
 typedef struct ecs_query_cache_match_t ecs_query_cache_match_t;
@@ -932,6 +924,7 @@ typedef struct ecs_event_record_t {
     struct ecs_event_id_record_t *wildcard;
     struct ecs_event_id_record_t *wildcard_pair;
     ecs_map_t event_ids;
+    uint64_t event_ids_filter;
     ecs_entity_t event;
 } ecs_event_record_t;
 struct ecs_observable_t {
@@ -939,7 +932,10 @@ struct ecs_observable_t {
     ecs_event_record_t on_remove;
     ecs_event_record_t on_set;
     ecs_event_record_t on_wildcard;
+    ecs_event_record_t on_table_create;
+    ecs_event_record_t on_table_delete;
     ecs_sparse_t events;
+    ecs_vec_t global_observers;
     uint64_t last_observer_id;
 };
 typedef struct ecs_table_range_t {
@@ -953,12 +949,11 @@ typedef struct ecs_var_t {
 } ecs_var_t;
 struct ecs_ref_t {
     ecs_entity_t entity;
-    ecs_entity_t id;
     uint64_t table_id;
     uint32_t table_version_fast;
     uint16_t table_version;
-    ecs_record_t *record;
     void *ptr;
+    ecs_entity_t id;
 };
 typedef struct ecs_page_iter_t {
     int32_t offset;
@@ -969,36 +964,52 @@ typedef struct ecs_worker_iter_t {
     int32_t index;
     int32_t count;
 } ecs_worker_iter_t;
+typedef struct ecs_table_cache_elem_t {
+    ecs_table_t *table;
+    ecs_table_record_t *tr;
+    int16_t column;
+    int16_t index;
+    int16_t count;
+} ecs_table_cache_elem_t;
 typedef struct ecs_table_cache_iter_t {
-    const struct ecs_table_cache_hdr_t *cur, *next;
-    bool iter_fill;
-    bool iter_empty;
+    const ecs_table_cache_elem_t *elems;
+    int32_t remaining;
+    const ecs_table_cache_elem_t *cur;
+    ecs_flags32_t flags;
 } ecs_table_cache_iter_t;
 typedef struct ecs_each_iter_t {
     ecs_table_cache_iter_t it;
     ecs_id_t ids;
     ecs_entity_t sources;
     ecs_size_t sizes;
-    int32_t columns;
+    int16_t columns;
     const ecs_table_record_t* trs;
+    ecs_component_record_t *cr;
 } ecs_each_iter_t;
 typedef struct ecs_query_op_profile_t {
     int32_t count[2];
 } ecs_query_op_profile_t;
+typedef struct ecs_query_trivial_ctx_t {
+    ecs_table_cache_iter_t it;
+    const ecs_table_record_t *tr;
+    int32_t start_from;
+    int32_t first_to_eval;
+} ecs_query_trivial_ctx_t;
 typedef struct ecs_query_iter_t {
     struct ecs_var_t *vars;
     const struct ecs_query_var_t *query_vars;
     const struct ecs_query_op_t *ops;
     struct ecs_query_op_ctx_t *op_ctx;
     uint64_t *written;
+    ecs_query_op_profile_t *profile;
+    int16_t op;
     ecs_query_cache_group_t *group;
     ecs_vec_t *tables;
     ecs_vec_t *all_tables;
     ecs_query_cache_match_t *elem;
     int32_t cur, all_cur;
-    ecs_query_op_profile_t *profile;
-    int16_t op;
     bool iter_single_group;
+    ecs_query_trivial_ctx_t trivial;
 } ecs_query_iter_t;
 typedef struct ecs_iter_private_t {
     union {
@@ -1010,16 +1021,77 @@ typedef struct ecs_iter_private_t {
     void *entity_iter;
     ecs_stack_cursor_t *stack_cursor;
 } ecs_iter_private_t;
+typedef struct ecs_cmd_entry_t {
+    int32_t first;
+    int32_t last;
+    ecs_id_t removed;
+} ecs_cmd_entry_t;
 typedef struct ecs_commands_t {
+    struct ecs_commands_t *prev;
+    struct ecs_commands_t *next;
     ecs_vec_t queue;
     ecs_stack_t stack;
     ecs_sparse_t entries;
+    ecs_entity_t entity;
+    ecs_cmd_entry_t entry;
+    int32_t cursor;
+    bool has_remove;
+    ecs_entity_t second_entity;
+    ecs_cmd_entry_t second_entry;
+    ecs_entity_t last_entity;
+    ecs_cmd_entry_t *last_entry;
 } ecs_commands_t;
 char* flecs_module_path_from_c(
     const char *c_name);
 void flecs_default_ctor(
     void *ptr,
     int32_t count,
+    const ecs_type_info_t *type_info);
+bool flecs_type_info_ctor(
+    void *ptr,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+bool flecs_type_info_dtor(
+    void *ptr,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+void flecs_type_info_copy(
+    void *dst,
+    const void *src,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+void flecs_type_info_move(
+    void *dst,
+    void *src,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+void flecs_type_info_copy_ctor(
+    void *dst,
+    const void *src,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+void flecs_type_info_move_ctor(
+    void *dst,
+    void *src,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+void flecs_type_info_ctor_move_dtor(
+    void *dst,
+    void *src,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+void flecs_type_info_move_dtor(
+    void *dst,
+    void *src,
+    int32_t count,
+    const ecs_type_info_t *type_info);
+int flecs_type_info_cmp(
+    const void *a,
+    const void *b,
+    const ecs_type_info_t *type_info);
+bool flecs_type_info_equals(
+    const void *a,
+    const void *b,
     const ecs_type_info_t *type_info);
 char* flecs_vasprintf(
     const char *fmt,
@@ -1046,19 +1118,13 @@ const char* flecs_parse_ws_eol(
     const char *ptr);
 const char* flecs_parse_digit(
     const char *ptr,
-    char *token);
+    char *token,
+    int32_t token_size);
 char* flecs_to_snake_case(
     const char *str);
 typedef struct ecs_suspend_readonly_state_t {
     bool is_readonly;
-    bool is_deferred;
-    bool cmd_flushing;
-    int32_t defer_count;
     ecs_entity_t scope;
-    ecs_entity_t with;
-    ecs_commands_t cmd_stack[2];
-    ecs_commands_t *cmd;
-    ecs_stage_t *stage;
 } ecs_suspend_readonly_state_t;
 ecs_world_t* flecs_suspend_readonly(
     const ecs_world_t *world,
@@ -1093,23 +1159,25 @@ void flecs_check_exclusive_world_access_write(
     const ecs_world_t *world);
 void flecs_check_exclusive_world_access_read(
     const ecs_world_t *world);
-typedef struct {
-    ecs_vec_t keys;
-    ecs_vec_t values;
+bool flecs_commands_end(
+    ecs_world_t *world,
+    ecs_stage_t *stage);
+typedef struct ecs_hm_bucket_t {
+    struct ecs_hm_bucket_t *next;
 } ecs_hm_bucket_t;
 typedef struct {
     ecs_hash_value_action_t hash;
     ecs_compare_action_t compare;
     ecs_size_t key_size;
     ecs_size_t value_size;
-    ecs_block_allocator_t *hashmap_allocator;
-    ecs_block_allocator_t bucket_allocator;
+    ecs_size_t value_offset;
+    ecs_size_t bucket_size;
     ecs_map_t impl;
 } ecs_hashmap_t;
 typedef struct {
     ecs_map_iter_t it;
     ecs_hm_bucket_t *bucket;
-    int32_t index;
+    const ecs_hashmap_t *map;
 } flecs_hashmap_iter_t;
 typedef struct {
     void *key;
@@ -1135,17 +1203,6 @@ flecs_hashmap_result_t flecs_hashmap_ensure_(
     ecs_size_t key_size,
     const void *key,
     ecs_size_t value_size);
-void flecs_hashmap_set_(
-    ecs_hashmap_t *map,
-    ecs_size_t key_size,
-    void *key,
-    ecs_size_t value_size,
-    const void *value);
-void flecs_hashmap_remove_(
-    ecs_hashmap_t *map,
-    ecs_size_t key_size,
-    const void *key,
-    ecs_size_t value_size);
 void flecs_hashmap_remove_w_hash_(
     ecs_hashmap_t *map,
     ecs_size_t key_size,
@@ -1158,8 +1215,7 @@ ecs_hm_bucket_t* flecs_hashmap_get_bucket(
 void flecs_hm_bucket_remove(
     ecs_hashmap_t *map,
     ecs_hm_bucket_t *bucket,
-    uint64_t hash,
-    int32_t index);
+    uint64_t hash);
 void flecs_hashmap_copy(
     ecs_hashmap_t *dst,
     const ecs_hashmap_t *src);
@@ -1171,7 +1227,6 @@ void* flecs_hashmap_next_(
     void *key_out,
     ecs_size_t value_size);
 struct ecs_record_t {
-    ecs_component_record_t *cr;
     ecs_table_t *table;
     uint32_t row;
     int32_t dense;
@@ -1179,7 +1234,6 @@ struct ecs_record_t {
 typedef struct ecs_table_cache_hdr_t {
     struct ecs_component_record_t *cr;
     ecs_table_t *table;
-    struct ecs_table_cache_hdr_t *prev, *next;
 } ecs_table_cache_hdr_t;
 struct ecs_table_record_t {
     ecs_table_cache_hdr_t hdr;
@@ -1198,16 +1252,11 @@ ecs_record_t* ecs_record_find(
     ecs_entity_t entity);
 ecs_entity_t ecs_record_get_entity(
     const ecs_record_t *record);
-ecs_record_t* ecs_write_begin(
+void flecs_add_ids(
     ecs_world_t *world,
-    ecs_entity_t entity);
-void ecs_write_end(
-    ecs_record_t *record);
-const ecs_record_t* ecs_read_begin(
-    ecs_world_t *world,
-    ecs_entity_t entity);
-void ecs_read_end(
-    const ecs_record_t *record);
+    ecs_entity_t entity,
+    const ecs_id_t *ids,
+    int32_t count);
 const void* ecs_record_get_id(
     const ecs_world_t *world,
     const ecs_record_t *record,
@@ -1227,11 +1276,27 @@ void* ecs_record_get_by_column(
  ecs_component_record_t* flecs_components_get(
     const ecs_world_t *world,
     ecs_id_t id);
+ ecs_component_record_t* flecs_components_ensure(
+    ecs_world_t *world,
+    ecs_id_t id);
 ecs_id_t flecs_component_get_id(
+    const ecs_component_record_t *cr);
+ecs_flags32_t flecs_component_get_flags(
+    const ecs_world_t *world,
+    ecs_id_t id);
+const ecs_type_info_t* flecs_component_get_type_info(
+    const ecs_component_record_t *cr);
+ecs_sparse_t* flecs_component_get_sparse(
+    const ecs_component_record_t *cr);
+ecs_component_record_t* flecs_component_dont_fragment_first(
+    const ecs_world_t *world);
+ecs_component_record_t* flecs_component_dont_fragment_next(
     const ecs_component_record_t *cr);
  const ecs_table_record_t* flecs_component_get_table(
     const ecs_component_record_t *cr,
     const ecs_table_t *table);
+ int32_t flecs_component_get_childof_depth(
+    const ecs_component_record_t *cr);
 bool flecs_component_iter(
     const ecs_component_record_t *cr,
     ecs_table_cache_iter_t *iter_out);
@@ -1247,6 +1312,8 @@ ecs_component_record_t* flecs_table_record_get_component(
     const ecs_table_record_t *tr);
 uint64_t flecs_table_id(
     ecs_table_t* table);
+ecs_flags32_t flecs_table_flags(
+    const ecs_table_t* table);
  ecs_table_t *flecs_table_traverse_add(
     ecs_world_t *world,
     ecs_table_t *table,
@@ -1265,15 +1332,12 @@ typedef struct ecs_entity_desc_t {
     const char *root_sep;
     const char *symbol;
     bool use_low_id;
-    const ecs_id_t *add;
-    const ecs_value_t *set;
-    const char *add_expr;
 } ecs_entity_desc_t;
 typedef struct ecs_bulk_desc_t {
     int32_t _canary;
     ecs_entity_t *entities;
     int32_t count;
-    ecs_id_t ids[(32)];
+    ecs_id_t ids[32];
     void **data;
     ecs_table_t *table;
 } ecs_bulk_desc_t;
@@ -1283,13 +1347,14 @@ typedef struct ecs_component_desc_t {
     ecs_type_info_t type;
 } ecs_component_desc_t;
 struct ecs_iter_t {
+    ecs_world_t *stage;
     ecs_world_t *world;
-    ecs_world_t *real_world;
     int32_t offset;
     int32_t count;
     const ecs_entity_t *entities;
     void **ptrs;
     const ecs_table_record_t **trs;
+    const int16_t *columns;
     const ecs_size_t *sizes;
     ecs_table_t *table;
     ecs_table_t *other_table;
@@ -1312,8 +1377,8 @@ struct ecs_iter_t {
     void *binding_ctx;
     void *callback_ctx;
     void *run_ctx;
-    double delta_time;
-    double delta_system_time;
+    float delta_time;
+    float delta_system_time;
     int32_t frame_offset;
     ecs_flags32_t flags;
     ecs_entity_t interrupted_by;
@@ -1348,8 +1413,9 @@ typedef struct ecs_observer_desc_t {
     int32_t _canary;
     ecs_entity_t entity;
     ecs_query_desc_t query;
-    ecs_entity_t events[(8)];
+    ecs_entity_t events[8];
     bool yield_existing;
+    bool global_observer;
     ecs_iter_action_t callback;
     ecs_run_action_t run;
     void *ctx;
@@ -1358,7 +1424,6 @@ typedef struct ecs_observer_desc_t {
     ecs_ctx_free_t callback_ctx_free;
     void *run_ctx;
     ecs_ctx_free_t run_ctx_free;
-    ecs_poly_t *observable;
     int32_t *last_event_id;
     int8_t term_index_;
     ecs_flags32_t flags_;
@@ -1373,12 +1438,14 @@ typedef struct ecs_event_desc_t {
     ecs_entity_t entity;
     void *param;
     const void *const_param;
+    void *set_ptr;
     ecs_poly_t *observable;
     ecs_flags32_t flags;
 } ecs_event_desc_t;
 typedef struct ecs_build_info_t {
     const char *compiler;
     const char **addons;
+    const char **flags;
     const char *version;
     int16_t version_major;
     int16_t version_minor;
@@ -1389,17 +1456,15 @@ typedef struct ecs_build_info_t {
 } ecs_build_info_t;
 typedef struct ecs_world_info_t {
     ecs_entity_t last_component_id;
-    ecs_entity_t min_id;
-    ecs_entity_t max_id;
-    double delta_time_raw;
-    double delta_time;
-    double time_scale;
-    double target_fps;
-    double frame_time_total;
-    double system_time_total;
-    double emit_time_total;
-    double merge_time_total;
-    double rematch_time_total;
+    float delta_time_raw;
+    float delta_time;
+    float time_scale;
+    float target_fps;
+    float frame_time_total;
+    float system_time_total;
+    float emit_time_total;
+    float merge_time_total;
+    float rematch_time_total;
     double world_time_total;
     double world_time_total_raw;
     int64_t frame_count_total;
@@ -1411,12 +1476,14 @@ typedef struct ecs_world_info_t {
     int64_t table_create_total;
     int64_t table_delete_total;
     int64_t pipeline_build_count_total;
-    int64_t systems_ran_frame;
-    int64_t observers_ran_frame;
+    int64_t systems_ran_total;
+    int64_t observers_ran_total;
+    int64_t queries_ran_total;
     int32_t tag_id_count;
     int32_t component_id_count;
     int32_t pair_id_count;
     int32_t table_count;
+    uint32_t creation_time;
     struct {
         int64_t add_count;
         int64_t remove_count;
@@ -1453,16 +1520,31 @@ typedef struct EcsComponent {
 typedef struct EcsPoly {
     ecs_poly_t *poly;
 } EcsPoly;
-typedef struct EcsDefaultChildComponent {
-    ecs_id_t component;
-} EcsDefaultChildComponent;
+typedef struct EcsParent {
+    ecs_entity_t value;
+} EcsParent;
+typedef struct {
+    const char *child_name;
+    ecs_table_t *table;
+    uint32_t child;
+    int32_t parent_index;
+} ecs_tree_spawner_child_t;
+typedef struct {
+    ecs_vec_t children;
+} ecs_tree_spawner_t;
+typedef struct EcsTreeSpawner {
+    ecs_tree_spawner_t data[(6)];
+} EcsTreeSpawner;
  extern const ecs_id_t ECS_PAIR;
  extern const ecs_id_t ECS_AUTO_OVERRIDE;
  extern const ecs_id_t ECS_TOGGLE;
+ extern const ecs_id_t ECS_VALUE_PAIR;
  extern const ecs_entity_t FLECS_IDEcsComponentID_;
  extern const ecs_entity_t FLECS_IDEcsIdentifierID_;
  extern const ecs_entity_t FLECS_IDEcsPolyID_;
- extern const ecs_entity_t FLECS_IDEcsDefaultChildComponentID_;
+ extern const ecs_entity_t FLECS_IDEcsParentID_;
+ extern const ecs_entity_t FLECS_IDEcsTreeSpawnerID_;
+ extern const ecs_entity_t EcsParentDepth;
  extern const ecs_entity_t EcsQuery;
  extern const ecs_entity_t EcsObserver;
  extern const ecs_entity_t EcsSystem;
@@ -1479,22 +1561,15 @@ typedef struct EcsDefaultChildComponent {
  extern const ecs_entity_t EcsVariable;
  extern const ecs_entity_t EcsTransitive;
  extern const ecs_entity_t EcsReflexive;
- extern const ecs_entity_t EcsFinal;
  extern const ecs_entity_t EcsInheritable;
  extern const ecs_entity_t EcsOnInstantiate;
  extern const ecs_entity_t EcsOverride;
  extern const ecs_entity_t EcsInherit;
  extern const ecs_entity_t EcsDontInherit;
- extern const ecs_entity_t EcsSymmetric;
  extern const ecs_entity_t EcsExclusive;
- extern const ecs_entity_t EcsAcyclic;
  extern const ecs_entity_t EcsTraversable;
  extern const ecs_entity_t EcsWith;
- extern const ecs_entity_t EcsOneOf;
  extern const ecs_entity_t EcsCanToggle;
- extern const ecs_entity_t EcsTrait;
- extern const ecs_entity_t EcsRelationship;
- extern const ecs_entity_t EcsTarget;
  extern const ecs_entity_t EcsPairIsTag;
  extern const ecs_entity_t EcsName;
  extern const ecs_entity_t EcsSymbol;
@@ -1502,10 +1577,8 @@ typedef struct EcsDefaultChildComponent {
  extern const ecs_entity_t EcsChildOf;
  extern const ecs_entity_t EcsIsA;
  extern const ecs_entity_t EcsDependsOn;
- extern const ecs_entity_t EcsSlotOf;
  extern const ecs_entity_t EcsOrderedChildren;
  extern const ecs_entity_t EcsModule;
- extern const ecs_entity_t EcsPrivate;
  extern const ecs_entity_t EcsPrefab;
  extern const ecs_entity_t EcsDisabled;
  extern const ecs_entity_t EcsNotQueryable;
@@ -1520,7 +1593,6 @@ typedef struct EcsDefaultChildComponent {
  extern const ecs_entity_t EcsRemove;
  extern const ecs_entity_t EcsDelete;
  extern const ecs_entity_t EcsPanic;
- extern const ecs_entity_t EcsSingleton;
  extern const ecs_entity_t EcsSparse;
  extern const ecs_entity_t EcsDontFragment;
  extern const ecs_entity_t EcsPredEq;
@@ -1565,48 +1637,15 @@ ecs_entities_t ecs_get_entities(
     const ecs_world_t *world);
 ecs_flags32_t ecs_world_get_flags(
     const ecs_world_t *world);
-double ecs_frame_begin(
-    ecs_world_t *world,
-    double delta_time);
-void ecs_frame_end(
-    ecs_world_t *world);
-void ecs_run_post_frame(
-    ecs_world_t *world,
-    ecs_fini_action_t action,
-    void *ctx);
-void ecs_quit(
-    ecs_world_t *world);
-bool ecs_should_quit(
-    const ecs_world_t *world);
- void ecs_measure_frame_time(
-    ecs_world_t *world,
-    bool enable);
- void ecs_measure_system_time(
-    ecs_world_t *world,
-    bool enable);
-void ecs_set_target_fps(
-    ecs_world_t *world,
-    double fps);
-void ecs_set_default_query_flags(
-    ecs_world_t *world,
-    ecs_flags32_t flags);
 bool ecs_readonly_begin(
     ecs_world_t *world,
     bool multi_threaded);
 void ecs_readonly_end(
     ecs_world_t *world);
 void ecs_merge(
-    ecs_world_t *world);
-bool ecs_defer_begin(
-    ecs_world_t *world);
-bool ecs_is_deferred(
+    ecs_world_t *stage);
+bool ecs_is_stage(
     const ecs_world_t *world);
-bool ecs_defer_end(
-    ecs_world_t *world);
-void ecs_defer_suspend(
-    ecs_world_t *world);
-void ecs_defer_resume(
-    ecs_world_t *world);
 void ecs_set_stage_count(
     ecs_world_t *world,
     int32_t stages);
@@ -1643,13 +1682,6 @@ void ecs_dim(
     int32_t entity_count);
 void ecs_shrink(
     ecs_world_t *world);
-void ecs_set_entity_range(
-    ecs_world_t *world,
-    ecs_entity_t id_start,
-    ecs_entity_t id_end);
-bool ecs_enable_range_check(
-    ecs_world_t *world,
-    bool enable);
 ecs_entity_t ecs_get_max_id(
     const ecs_world_t *world);
 void ecs_run_aperiodic(
@@ -1659,6 +1691,7 @@ typedef struct ecs_delete_empty_tables_desc_t {
     uint16_t clear_generation;
     uint16_t delete_generation;
     double time_budget_seconds;
+    int32_t offset;
 } ecs_delete_empty_tables_desc_t;
 int32_t ecs_delete_empty_tables(
     ecs_world_t *world,
@@ -1692,6 +1725,9 @@ ecs_entity_t ecs_new_w_table(
 ecs_entity_t ecs_entity_init(
     ecs_world_t *world,
     const ecs_entity_desc_t *desc);
+ecs_entity_t ecs_insert_w_values(
+    ecs_world_t *world,
+    const ecs_value_t *values);
 const ecs_entity_t* ecs_bulk_init(
     ecs_world_t *world,
     const ecs_bulk_desc_t *desc);
@@ -1736,11 +1772,6 @@ void ecs_clear(
 void ecs_remove_all(
     ecs_world_t *world,
     ecs_id_t component);
-ecs_entity_t ecs_set_with(
-    ecs_world_t *world,
-    ecs_id_t component);
-ecs_id_t ecs_get_with(
-    const ecs_world_t *world);
 void ecs_enable(
     ecs_world_t *world,
     ecs_entity_t entity,
@@ -1762,6 +1793,11 @@ bool ecs_is_enabled_id(
     const ecs_world_t *world,
     ecs_entity_t entity,
     ecs_id_t component);
+ void* ecs_get_sparse_id(
+    const ecs_world_t *world,
+    ecs_entity_t entity,
+    ecs_id_t component,
+    size_t size);
 void* ecs_ensure_id(
     ecs_world_t *world,
     ecs_entity_t entity,
@@ -1777,7 +1813,8 @@ void* ecs_ref_get_id(
     ecs_id_t component);
 void ecs_ref_update(
     const ecs_world_t *world,
-    ecs_ref_t *ref);
+    ecs_ref_t *ref,
+    ecs_id_t component);
 void* ecs_emplace_id(
     ecs_world_t *world,
     ecs_entity_t entity,
@@ -1817,6 +1854,8 @@ bool ecs_exists(
 void ecs_set_version(
     ecs_world_t *world,
     ecs_entity_t entity);
+uint32_t ecs_get_version(
+    ecs_entity_t entity);
 const ecs_type_t* ecs_get_type(
     const ecs_world_t *world,
     ecs_entity_t entity);
@@ -1848,6 +1887,10 @@ ecs_entity_t ecs_get_target(
 ecs_entity_t ecs_get_parent(
     const ecs_world_t *world,
     ecs_entity_t entity);
+ecs_entity_t ecs_new_w_parent(
+    ecs_world_t *world,
+    ecs_entity_t parent,
+    const char *name);
 ecs_entity_t ecs_get_target_for_id(
     const ecs_world_t *world,
     ecs_entity_t entity,
@@ -1975,7 +2018,7 @@ ecs_flags32_t ecs_id_get_flags(
     const ecs_world_t *world,
     ecs_id_t component);
 const char* ecs_id_flag_str(
-    ecs_id_t component_flags);
+    uint64_t component_flags);
 char* ecs_id_str(
     const ecs_world_t *world,
     ecs_id_t component);
@@ -2004,13 +2047,21 @@ ecs_iter_t ecs_each_id(
     ecs_id_t component);
 bool ecs_each_next(
     ecs_iter_t *it);
-ecs_iter_t ecs_children(
+ ecs_iter_t ecs_children(
     const ecs_world_t *world,
+    ecs_entity_t parent);
+ ecs_iter_t ecs_children_w_rel(
+    const ecs_world_t *world,
+    ecs_entity_t relationship,
     ecs_entity_t parent);
 bool ecs_children_next(
     ecs_iter_t *it);
 ecs_query_t* ecs_query_init(
     ecs_world_t *world,
+    const ecs_query_desc_t *desc);
+ecs_query_t* ecs_query_update(
+    ecs_world_t *world,
+    ecs_entity_t entity,
     const ecs_query_desc_t *desc);
 void ecs_query_fini(
     ecs_query_t *query);
@@ -2029,24 +2080,31 @@ ecs_iter_t ecs_query_iter(
 bool ecs_query_next(
     ecs_iter_t *it);
 bool ecs_query_has(
-    ecs_query_t *query,
+    const ecs_query_t *query,
     ecs_entity_t entity,
     ecs_iter_t *it);
 bool ecs_query_has_table(
-    ecs_query_t *query,
+    const ecs_query_t *query,
     ecs_table_t *table,
     ecs_iter_t *it);
 bool ecs_query_has_range(
-    ecs_query_t *query,
+    const ecs_query_t *query,
     ecs_table_range_t *range,
     ecs_iter_t *it);
 int32_t ecs_query_match_count(
     const ecs_query_t *query);
+ extern const ecs_entity_t EcsOnQueryCacheRevalidate;
+typedef struct ecs_query_cache_revalidate_t {
+    ecs_entity_t query;
+    uint64_t table_id;
+} ecs_query_cache_revalidate_t;
 char* ecs_query_plan(
     const ecs_query_t *query);
 char* ecs_query_plan_w_profile(
     const ecs_query_t *query,
     const ecs_iter_t *it);
+char* ecs_query_plans(
+    const ecs_query_t *query);
 const char* ecs_query_args_parse(
     ecs_query_t *query,
     ecs_iter_t *it,
@@ -2061,6 +2119,8 @@ void ecs_iter_skip(
 void ecs_iter_set_group(
     ecs_iter_t *it,
     uint64_t group_id);
+const ecs_map_t* ecs_query_get_groups(
+    const ecs_query_t *query);
 void* ecs_query_get_group_ctx(
     const ecs_query_t *query,
     uint64_t group_id);
@@ -2086,6 +2146,10 @@ void ecs_enqueue(
     ecs_event_desc_t *desc);
 ecs_entity_t ecs_observer_init(
     ecs_world_t *world,
+    const ecs_observer_desc_t *desc);
+ecs_entity_t ecs_observer_update(
+    ecs_world_t *world,
+    ecs_entity_t observer,
     const ecs_observer_desc_t *desc);
 const ecs_observer_t* ecs_observer_get(
     const ecs_world_t *world,
@@ -2135,8 +2199,6 @@ uint64_t ecs_iter_get_group(
     const ecs_iter_t *it);
 bool ecs_iter_changed(
     ecs_iter_t *it);
-char* ecs_iter_str(
-    const ecs_iter_t *it);
 ecs_iter_t ecs_page_iter(
     const ecs_iter_t *it,
     int32_t offset,
@@ -2150,6 +2212,10 @@ ecs_iter_t ecs_worker_iter(
 bool ecs_worker_next(
     ecs_iter_t *it);
 void* ecs_field_w_size(
+    const ecs_iter_t *it,
+    size_t size,
+    int8_t index);
+void* ecs_base_field_w_size(
     const ecs_iter_t *it,
     size_t size,
     int8_t index);
@@ -2177,6 +2243,9 @@ ecs_entity_t ecs_field_src(
     const ecs_iter_t *it,
     int8_t index);
 size_t ecs_field_size(
+    const ecs_iter_t *it,
+    int8_t index);
+size_t ecs_field_stride(
     const ecs_iter_t *it,
     int8_t index);
 bool ecs_field_is_self(
@@ -2222,6 +2291,11 @@ bool ecs_table_has_id(
     const ecs_world_t *world,
     const ecs_table_t *table,
     ecs_id_t component);
+ecs_entity_t ecs_table_get_target(
+    const ecs_world_t *world,
+    const ecs_table_t *table,
+    ecs_entity_t relationship,
+    int32_t index);
 int32_t ecs_table_get_depth(
     const ecs_world_t *world,
     const ecs_table_t *table,
@@ -2254,13 +2328,6 @@ void ecs_table_swap_rows(
     ecs_table_t* table,
     int32_t row_1,
     int32_t row_2);
-bool ecs_commit(
-    ecs_world_t *world,
-    ecs_entity_t entity,
-    ecs_record_t *record,
-    ecs_table_t *table,
-    const ecs_type_t *added,
-    const ecs_type_t *removed);
 int32_t ecs_search(
     const ecs_world_t *world,
     const ecs_table_t *table,
@@ -2279,68 +2346,22 @@ int32_t ecs_search_relation(
     ecs_id_t component,
     ecs_entity_t rel,
     ecs_flags64_t flags,
-    ecs_entity_t *subject_out,
+    ecs_entity_t *tgt_out,
     ecs_id_t *component_out,
+    struct ecs_table_record_t **tr_out);
+int32_t ecs_search_relation_for_entity(
+    const ecs_world_t *world,
+    ecs_entity_t entity,
+    ecs_id_t id,
+    ecs_entity_t rel,
+    bool self,
+    ecs_component_record_t *cr,
+    ecs_entity_t *tgt_out,
+    ecs_id_t *id_out,
     struct ecs_table_record_t **tr_out);
 void ecs_table_clear_entities(
     ecs_world_t* world,
     ecs_table_t* table);
-int ecs_value_init(
-    const ecs_world_t *world,
-    ecs_entity_t type,
-    void *ptr);
-int ecs_value_init_w_type_info(
-    const ecs_world_t *world,
-    const ecs_type_info_t *ti,
-    void *ptr);
-void* ecs_value_new(
-    ecs_world_t *world,
-    ecs_entity_t type);
-void* ecs_value_new_w_type_info(
-    ecs_world_t *world,
-    const ecs_type_info_t *ti);
-int ecs_value_fini_w_type_info(
-    const ecs_world_t *world,
-    const ecs_type_info_t *ti,
-    void *ptr);
-int ecs_value_fini(
-    const ecs_world_t *world,
-    ecs_entity_t type,
-    void* ptr);
-int ecs_value_free(
-    ecs_world_t *world,
-    ecs_entity_t type,
-    void* ptr);
-int ecs_value_copy_w_type_info(
-    const ecs_world_t *world,
-    const ecs_type_info_t *ti,
-    void* dst,
-    const void *src);
-int ecs_value_copy(
-    const ecs_world_t *world,
-    ecs_entity_t type,
-    void* dst,
-    const void *src);
-int ecs_value_move_w_type_info(
-    const ecs_world_t *world,
-    const ecs_type_info_t *ti,
-    void* dst,
-    void *src);
-int ecs_value_move(
-    const ecs_world_t *world,
-    ecs_entity_t type,
-    void* dst,
-    void *src);
-int ecs_value_move_ctor_w_type_info(
-    const ecs_world_t *world,
-    const ecs_type_info_t *ti,
-    void* dst,
-    void *src);
-int ecs_value_move_ctor(
-    const ecs_world_t *world,
-    ecs_entity_t type,
-    void* dst,
-    void *src);
 void ecs_deprecated_(
     const char *file,
     int32_t line,
@@ -2357,7 +2378,7 @@ void ecs_print_(
     const char *fmt,
     ...);
 void ecs_printv_(
-    int level,
+    int32_t level,
     const char *file,
     int32_t line,
     const char *fmt,
@@ -2369,7 +2390,7 @@ void ecs_log_(
     const char *fmt,
     ...);
 void ecs_logv_(
-    int level,
+    int32_t level,
     const char *file,
     int32_t line,
     const char *fmt,
@@ -2423,11 +2444,61 @@ bool ecs_log_enable_timedelta(
 int ecs_log_last_error(void);
 void ecs_log_start_capture(bool capture_try);
 char* ecs_log_stop_capture(void);
+ extern const ecs_entity_t EcsFinal;
+ extern const ecs_entity_t EcsSymmetric;
+ extern const ecs_entity_t EcsAcyclic;
+ extern const ecs_entity_t EcsOneOf;
+ extern const ecs_entity_t EcsTrait;
+ extern const ecs_entity_t EcsRelationship;
+ extern const ecs_entity_t EcsTarget;
+ extern const ecs_entity_t EcsSingleton;
+typedef struct ecs_entity_range_t {
+    uint32_t min;
+    uint32_t max;
+    uint32_t cur;
+    ecs_vec_t recycled;
+} ecs_entity_range_t;
+const ecs_entity_range_t* ecs_entity_range_new(
+    ecs_world_t *world,
+    uint32_t min,
+    uint32_t max);
+void ecs_entity_range_set(
+    ecs_world_t *world,
+    const ecs_entity_range_t *range);
+const ecs_entity_range_t* ecs_entity_range_get(
+    const ecs_world_t *world);
+float ecs_frame_begin(
+    ecs_world_t *world,
+    float delta_time);
+void ecs_frame_end(
+    ecs_world_t *world);
+void ecs_run_post_frame(
+    ecs_world_t *world,
+    ecs_fini_action_t action,
+    void *ctx);
+void ecs_quit(
+    ecs_world_t *world);
+bool ecs_should_quit(
+    const ecs_world_t *world);
+void ecs_measure_frame_time(
+    ecs_world_t *world,
+    bool enable);
+void ecs_measure_system_time(
+    ecs_world_t *world,
+    bool enable);
+void ecs_set_target_fps(
+    ecs_world_t *world,
+    float fps);
+void ecs_set_time_scale(
+    ecs_world_t *world,
+    float scale);
+void ecs_reset_clock(
+    ecs_world_t *world);
 typedef int(*ecs_app_init_action_t)(
     ecs_world_t *world);
 typedef struct ecs_app_desc_t {
-    double target_fps;
-    double delta_time;
+    float target_fps;
+    float delta_time;
     int32_t threads;
     int32_t frames;
     bool enable_rest;
@@ -2519,7 +2590,7 @@ int ecs_http_server_start(
     ecs_http_server_t* server);
 void ecs_http_server_dequeue(
     ecs_http_server_t* server,
-    double delta_time);
+    float delta_time);
 void ecs_http_server_stop(
     ecs_http_server_t* server);
 int ecs_http_server_http_request(
@@ -2543,9 +2614,16 @@ const char* ecs_http_get_param(
     const char* name);
  extern const ecs_entity_t FLECS_IDEcsRestID_;
 typedef struct {
+    ecs_world_t *world;
+    ecs_http_server_t *srv;
+    int32_t rc;
+    ecs_map_t cmd_captures;
+    double last_time;
+} ecs_rest_ctx_t;
+typedef struct {
     uint16_t port;
     char *ipaddr;
-    void *impl;
+    ecs_rest_ctx_t *impl;
 } EcsRest;
 ecs_http_server_t* ecs_rest_server_init(
     ecs_world_t *world,
@@ -2555,9 +2633,9 @@ void ecs_rest_server_fini(
 void FlecsRestImport(
     ecs_world_t *world);
 typedef struct EcsTimer {
-    double timeout;
-    double time;
-    double overshoot;
+    float timeout;
+    float time;
+    float overshoot;
     int32_t fired_count;
     bool active;
     bool single_shot;
@@ -2566,20 +2644,20 @@ typedef struct EcsRateFilter {
     ecs_entity_t src;
     int32_t rate;
     int32_t tick_count;
-    double time_elapsed;
+    float time_elapsed;
 } EcsRateFilter;
 ecs_entity_t ecs_set_timeout(
     ecs_world_t *world,
     ecs_entity_t tick_source,
-    double timeout);
-double ecs_get_timeout(
+    float timeout);
+float ecs_get_timeout(
     const ecs_world_t *world,
     ecs_entity_t tick_source);
 ecs_entity_t ecs_set_interval(
     ecs_world_t *world,
     ecs_entity_t tick_source,
-    double interval);
-double ecs_get_interval(
+    float interval);
+float ecs_get_interval(
     const ecs_world_t *world,
     ecs_entity_t tick_source);
 void ecs_start_timer(
@@ -2611,6 +2689,10 @@ typedef struct ecs_pipeline_desc_t {
 ecs_entity_t ecs_pipeline_init(
     ecs_world_t *world,
     const ecs_pipeline_desc_t *desc);
+ecs_entity_t ecs_pipeline_update(
+    ecs_world_t *world,
+    ecs_entity_t pipeline,
+    const ecs_pipeline_desc_t *desc);
 void ecs_set_pipeline(
     ecs_world_t *world,
     ecs_entity_t pipeline);
@@ -2618,16 +2700,11 @@ ecs_entity_t ecs_get_pipeline(
     const ecs_world_t *world);
 bool ecs_progress(
     ecs_world_t *world,
-    double delta_time);
-void ecs_set_time_scale(
-    ecs_world_t *world,
-    double scale);
-void ecs_reset_clock(
-    ecs_world_t *world);
+    float delta_time);
 void ecs_run_pipeline(
     ecs_world_t *world,
     ecs_entity_t pipeline,
-    double delta_time);
+    float delta_time);
 void ecs_set_threads(
     ecs_world_t *world,
     int32_t threads);
@@ -2640,12 +2717,13 @@ void FlecsPipelineImport(
     ecs_world_t *world);
 typedef struct EcsTickSource {
     bool tick;
-    double time_elapsed;
+    float time_elapsed;
 } EcsTickSource;
 typedef struct ecs_system_desc_t {
     int32_t _canary;
     ecs_entity_t entity;
     ecs_query_desc_t query;
+    ecs_entity_t phase;
     ecs_iter_action_t callback;
     ecs_run_action_t run;
     void *ctx;
@@ -2654,7 +2732,7 @@ typedef struct ecs_system_desc_t {
     ecs_ctx_free_t callback_ctx_free;
     void *run_ctx;
     ecs_ctx_free_t run_ctx_free;
-    double interval;
+    float interval;
     int32_t rate;
     ecs_entity_t tick_source;
     bool multi_threaded;
@@ -2663,11 +2741,17 @@ typedef struct ecs_system_desc_t {
 ecs_entity_t ecs_system_init(
     ecs_world_t *world,
     const ecs_system_desc_t *desc);
+ecs_entity_t ecs_system_update(
+    ecs_world_t *world,
+    ecs_entity_t system,
+    const ecs_system_desc_t *desc);
 typedef struct ecs_system_t {
     ecs_header_t hdr;
     ecs_run_action_t run;
     ecs_iter_action_t action;
     ecs_query_t *query;
+    uint64_t group_id;
+    bool group_id_set;
     ecs_entity_t tick_source;
     bool multi_threaded;
     bool immediate;
@@ -2678,32 +2762,36 @@ typedef struct ecs_system_t {
     ecs_ctx_free_t ctx_free;
     ecs_ctx_free_t callback_ctx_free;
     ecs_ctx_free_t run_ctx_free;
-    double time_spent;
-    double time_passed;
+    float time_spent;
+    float time_passed;
     int64_t last_frame;
     flecs_poly_dtor_t dtor;
 } ecs_system_t;
 const ecs_system_t* ecs_system_get(
     const ecs_world_t *world,
     ecs_entity_t system);
+void ecs_system_set_group(
+    ecs_world_t *world,
+    ecs_entity_t system,
+    uint64_t group_id);
 ecs_entity_t ecs_run(
     ecs_world_t *world,
     ecs_entity_t system,
-    double delta_time,
+    float delta_time,
     void *param);
 ecs_entity_t ecs_run_worker(
     ecs_world_t *world,
     ecs_entity_t system,
     int32_t stage_current,
     int32_t stage_count,
-    double delta_time,
+    float delta_time,
     void *param);
 void FlecsSystemImport(
     ecs_world_t *world);
 typedef struct ecs_gauge_t {
-    double avg[(60)];
-    double min[(60)];
-    double max[(60)];
+    float avg[(60)];
+    float min[(60)];
+    float max[(60)];
 } ecs_gauge_t;
 typedef struct ecs_counter_t {
     ecs_gauge_t rate;
@@ -2916,18 +3004,27 @@ void ecs_metric_copy(
  extern ecs_entity_t FLECS_IDEcsWorldSummaryID_;
  extern ecs_entity_t FLECS_IDEcsSystemStatsID_;
  extern ecs_entity_t FLECS_IDEcsPipelineStatsID_;
+ extern ecs_entity_t FLECS_IDecs_entities_memory_tID_;
+ extern ecs_entity_t FLECS_IDecs_component_index_memory_tID_;
+ extern ecs_entity_t FLECS_IDecs_query_memory_tID_;
+ extern ecs_entity_t FLECS_IDecs_component_memory_tID_;
+ extern ecs_entity_t FLECS_IDecs_table_memory_tID_;
+ extern ecs_entity_t FLECS_IDecs_misc_memory_tID_;
+ extern ecs_entity_t FLECS_IDecs_table_histogram_tID_;
+ extern ecs_entity_t FLECS_IDecs_allocator_memory_tID_;
+ extern ecs_entity_t FLECS_IDEcsWorldMemoryID_;
  extern ecs_entity_t EcsPeriod1s;
  extern ecs_entity_t EcsPeriod1m;
  extern ecs_entity_t EcsPeriod1h;
  extern ecs_entity_t EcsPeriod1d;
  extern ecs_entity_t EcsPeriod1w;
 typedef struct {
-    double elapsed;
+    float elapsed;
     int32_t reduce_count;
 } EcsStatsHeader;
 typedef struct {
     EcsStatsHeader hdr;
-    ecs_world_stats_t stats;
+    ecs_world_stats_t *stats;
 } EcsWorldStats;
 typedef struct {
     EcsStatsHeader hdr;
@@ -2940,16 +3037,154 @@ typedef struct {
 typedef struct {
     double target_fps;
     double time_scale;
+    double fps;
     double frame_time_total;
     double system_time_total;
     double merge_time_total;
-    double frame_time_last;
-    double system_time_last;
-    double merge_time_last;
+    int64_t entity_count;
+    int64_t table_count;
     int64_t frame_count;
     int64_t command_count;
+    int64_t merge_count;
+    int64_t systems_ran_total;
+    int64_t observers_ran_total;
+    int64_t queries_ran_total;
+    int32_t tag_count;
+    int32_t component_count;
+    int32_t pair_count;
+    double frame_time_frame;
+    double system_time_frame;
+    double merge_time_frame;
+    int64_t merge_count_frame;
+    int64_t systems_ran_frame;
+    int64_t observers_ran_frame;
+    int64_t queries_ran_frame;
+    int64_t command_count_frame;
+    double simulation_time;
+    uint32_t uptime;
     ecs_build_info_t build_info;
 } EcsWorldSummary;
+typedef struct {
+    int32_t alive_count;
+    int32_t not_alive_count;
+    ecs_size_t bytes_entity_index;
+    ecs_size_t bytes_names;
+    ecs_size_t bytes_doc_strings;
+} ecs_entities_memory_t;
+typedef struct {
+    int32_t instances;
+    ecs_size_t bytes_table_components;
+    ecs_size_t bytes_table_components_unused;
+    ecs_size_t bytes_toggle_bitsets;
+    ecs_size_t bytes_sparse_components;
+} ecs_component_memory_t;
+typedef struct {
+    int32_t count;
+    ecs_size_t bytes_component_record;
+    ecs_size_t bytes_table_cache;
+    ecs_size_t bytes_name_index;
+    ecs_size_t bytes_ordered_children;
+    ecs_size_t bytes_reachable_cache;
+} ecs_component_index_memory_t;
+typedef struct {
+    int32_t count;
+    int32_t cached_count;
+    ecs_size_t bytes_query;
+    ecs_size_t bytes_cache;
+    ecs_size_t bytes_group_by;
+    ecs_size_t bytes_order_by;
+    ecs_size_t bytes_plan;
+    ecs_size_t bytes_terms;
+    ecs_size_t bytes_misc;
+} ecs_query_memory_t;
+typedef struct {
+    int32_t count;
+    int32_t empty_count;
+    int32_t column_count;
+    ecs_size_t bytes_table;
+    ecs_size_t bytes_type;
+    ecs_size_t bytes_entities;
+    ecs_size_t bytes_overrides;
+    ecs_size_t bytes_column_map;
+    ecs_size_t bytes_component_map;
+    ecs_size_t bytes_dirty_state;
+    ecs_size_t bytes_edges;
+} ecs_table_memory_t;
+typedef struct {
+    int32_t entity_counts[14];
+} ecs_table_histogram_t;
+typedef struct {
+    ecs_size_t bytes_world;
+    ecs_size_t bytes_observers;
+    ecs_size_t bytes_systems;
+    ecs_size_t bytes_pipelines;
+    ecs_size_t bytes_table_lookup;
+    ecs_size_t bytes_component_record_lookup;
+    ecs_size_t bytes_locked_components;
+    ecs_size_t bytes_type_info;
+    ecs_size_t bytes_commands;
+    ecs_size_t bytes_rematch_monitor;
+    ecs_size_t bytes_component_ids;
+    ecs_size_t bytes_reflection;
+    ecs_size_t bytes_tree_spawner;
+    ecs_size_t bytes_prefab_child_indices;
+    ecs_size_t bytes_stats;
+    ecs_size_t bytes_rest;
+} ecs_misc_memory_t;
+typedef struct {
+    ecs_size_t bytes_graph_edge;
+    ecs_size_t bytes_component_record;
+    ecs_size_t bytes_pair_record;
+    ecs_size_t bytes_table_diff;
+    ecs_size_t bytes_sparse_chunk;
+    ecs_size_t bytes_allocator;
+    ecs_size_t bytes_stack_allocator;
+    ecs_size_t bytes_cmd_entry_chunk;
+    ecs_size_t bytes_query_impl;
+    ecs_size_t bytes_query_cache;
+    ecs_size_t bytes_misc;
+} ecs_allocator_memory_t;
+typedef struct {
+    ecs_entities_memory_t entities;
+    ecs_component_memory_t components;
+    ecs_component_index_memory_t component_index;
+    ecs_query_memory_t queries;
+    ecs_table_memory_t tables;
+    ecs_table_histogram_t table_histogram;
+    ecs_misc_memory_t misc;
+    ecs_allocator_memory_t allocators;
+    double collection_time;
+} EcsWorldMemory;
+ecs_entities_memory_t ecs_entity_memory_get(
+    const ecs_world_t *world);
+void ecs_component_record_memory_get(
+    const ecs_component_record_t *cr,
+    ecs_component_index_memory_t *result);
+ecs_component_index_memory_t ecs_component_index_memory_get(
+    const ecs_world_t *world);
+void ecs_query_memory_get(
+    const ecs_query_t *query,
+    ecs_query_memory_t *result);
+ecs_query_memory_t ecs_queries_memory_get(
+    const ecs_world_t *world);
+void ecs_table_component_memory_get(
+    const ecs_table_t *table,
+    ecs_component_memory_t *result);
+ecs_component_memory_t ecs_component_memory_get(
+    const ecs_world_t *world);
+void ecs_table_memory_get(
+    const ecs_table_t *table,
+    ecs_table_memory_t *result);
+ecs_table_memory_t ecs_tables_memory_get(
+    const ecs_world_t *world);
+ecs_table_histogram_t ecs_table_histogram_get(
+    const ecs_world_t *world);
+ecs_misc_memory_t ecs_misc_memory_get(
+    const ecs_world_t *world);
+ecs_allocator_memory_t ecs_allocator_memory_get(
+    const ecs_world_t *world);
+ecs_size_t ecs_memory_get(
+    const ecs_world_t *world);
 void FlecsStatsImport(
     ecs_world_t *world);
  extern ecs_entity_t FLECS_IDFlecsMetricsID_;
@@ -3015,7 +3250,7 @@ typedef struct ecs_alert_desc_t {
     const char *brief;
     ecs_entity_t severity;
     ecs_alert_severity_filter_t severity_filters[(4)];
-    double retain_period;
+    float retain_period;
     ecs_entity_t member;
     ecs_id_t id;
     const char *var;
@@ -3100,13 +3335,15 @@ typedef struct ecs_entity_to_json_desc_t {
     bool serialize_alerts;
     ecs_entity_t serialize_refs;
     bool serialize_matches;
+    bool (*component_filter)
+        (const ecs_world_t *, ecs_entity_t);
 } ecs_entity_to_json_desc_t;
 char* ecs_entity_to_json(
-    const ecs_world_t *world,
+    ecs_world_t *world,
     ecs_entity_t entity,
     const ecs_entity_to_json_desc_t *desc);
 int ecs_entity_to_json_buf(
-    const ecs_world_t *world,
+    ecs_world_t *world,
     ecs_entity_t entity,
     ecs_strbuf_t *buf_out,
     const ecs_entity_to_json_desc_t *desc);
@@ -3128,6 +3365,9 @@ typedef struct ecs_iter_to_json_desc_t {
     bool serialize_alerts;
     ecs_entity_t serialize_refs;
     bool serialize_matches;
+    bool serialize_parents_before_children;
+    bool (*component_filter)
+        (const ecs_world_t *, ecs_entity_t);
     ecs_poly_t *query;
 } ecs_iter_to_json_desc_t;
 char* ecs_iter_to_json(
@@ -3178,104 +3418,152 @@ int ecs_world_to_json_buf(
  extern ecs_entity_t EcsZebi;
  extern ecs_entity_t EcsYobi;
  extern ecs_entity_t EcsDuration;
- extern ecs_entity_t EcsPicoSeconds;
- extern ecs_entity_t EcsNanoSeconds;
- extern ecs_entity_t EcsMicroSeconds;
- extern ecs_entity_t EcsMilliSeconds;
- extern ecs_entity_t EcsSeconds;
- extern ecs_entity_t EcsMinutes;
- extern ecs_entity_t EcsHours;
- extern ecs_entity_t EcsDays;
+ extern     ecs_entity_t EcsPicoSeconds;
+ extern     ecs_entity_t EcsNanoSeconds;
+ extern     ecs_entity_t EcsMicroSeconds;
+ extern     ecs_entity_t EcsMilliSeconds;
+ extern     ecs_entity_t EcsSeconds;
+ extern     ecs_entity_t EcsMinutes;
+ extern     ecs_entity_t EcsHours;
+ extern     ecs_entity_t EcsDays;
  extern ecs_entity_t EcsTime;
- extern ecs_entity_t EcsDate;
+ extern     ecs_entity_t EcsDate;
  extern ecs_entity_t EcsMass;
- extern ecs_entity_t EcsGrams;
- extern ecs_entity_t EcsKiloGrams;
+ extern     ecs_entity_t EcsGrams;
+ extern     ecs_entity_t EcsKiloGrams;
  extern ecs_entity_t EcsElectricCurrent;
- extern ecs_entity_t EcsAmpere;
+ extern     ecs_entity_t EcsAmpere;
  extern ecs_entity_t EcsAmount;
- extern ecs_entity_t EcsMole;
+ extern     ecs_entity_t EcsMole;
  extern ecs_entity_t EcsLuminousIntensity;
- extern ecs_entity_t EcsCandela;
+ extern     ecs_entity_t EcsCandela;
  extern ecs_entity_t EcsForce;
- extern ecs_entity_t EcsNewton;
+ extern     ecs_entity_t EcsNewton;
  extern ecs_entity_t EcsLength;
- extern ecs_entity_t EcsMeters;
- extern ecs_entity_t EcsPicoMeters;
- extern ecs_entity_t EcsNanoMeters;
- extern ecs_entity_t EcsMicroMeters;
- extern ecs_entity_t EcsMilliMeters;
- extern ecs_entity_t EcsCentiMeters;
- extern ecs_entity_t EcsKiloMeters;
- extern ecs_entity_t EcsMiles;
- extern ecs_entity_t EcsPixels;
+ extern     ecs_entity_t EcsMeters;
+ extern         ecs_entity_t EcsPicoMeters;
+ extern         ecs_entity_t EcsNanoMeters;
+ extern         ecs_entity_t EcsMicroMeters;
+ extern         ecs_entity_t EcsMilliMeters;
+ extern         ecs_entity_t EcsCentiMeters;
+ extern         ecs_entity_t EcsKiloMeters;
+ extern     ecs_entity_t EcsMiles;
+ extern     ecs_entity_t EcsPixels;
  extern ecs_entity_t EcsPressure;
- extern ecs_entity_t EcsPascal;
- extern ecs_entity_t EcsBar;
+ extern     ecs_entity_t EcsPascal;
+ extern     ecs_entity_t EcsBar;
  extern ecs_entity_t EcsSpeed;
- extern ecs_entity_t EcsMetersPerSecond;
- extern ecs_entity_t EcsKiloMetersPerSecond;
- extern ecs_entity_t EcsKiloMetersPerHour;
- extern ecs_entity_t EcsMilesPerHour;
+ extern     ecs_entity_t EcsMetersPerSecond;
+ extern     ecs_entity_t EcsKiloMetersPerSecond;
+ extern     ecs_entity_t EcsKiloMetersPerHour;
+ extern     ecs_entity_t EcsMilesPerHour;
  extern ecs_entity_t EcsTemperature;
- extern ecs_entity_t EcsKelvin;
- extern ecs_entity_t EcsCelsius;
- extern ecs_entity_t EcsFahrenheit;
+ extern     ecs_entity_t EcsKelvin;
+ extern     ecs_entity_t EcsCelsius;
+ extern     ecs_entity_t EcsFahrenheit;
  extern ecs_entity_t EcsData;
- extern ecs_entity_t EcsBits;
- extern ecs_entity_t EcsKiloBits;
- extern ecs_entity_t EcsMegaBits;
- extern ecs_entity_t EcsGigaBits;
- extern ecs_entity_t EcsBytes;
- extern ecs_entity_t EcsKiloBytes;
- extern ecs_entity_t EcsMegaBytes;
- extern ecs_entity_t EcsGigaBytes;
- extern ecs_entity_t EcsKibiBytes;
- extern ecs_entity_t EcsMebiBytes;
- extern ecs_entity_t EcsGibiBytes;
+ extern     ecs_entity_t EcsBits;
+ extern         ecs_entity_t EcsKiloBits;
+ extern         ecs_entity_t EcsMegaBits;
+ extern         ecs_entity_t EcsGigaBits;
+ extern     ecs_entity_t EcsBytes;
+ extern         ecs_entity_t EcsKiloBytes;
+ extern         ecs_entity_t EcsMegaBytes;
+ extern         ecs_entity_t EcsGigaBytes;
+ extern         ecs_entity_t EcsKibiBytes;
+ extern         ecs_entity_t EcsMebiBytes;
+ extern         ecs_entity_t EcsGibiBytes;
  extern ecs_entity_t EcsDataRate;
- extern ecs_entity_t EcsBitsPerSecond;
- extern ecs_entity_t EcsKiloBitsPerSecond;
- extern ecs_entity_t EcsMegaBitsPerSecond;
- extern ecs_entity_t EcsGigaBitsPerSecond;
- extern ecs_entity_t EcsBytesPerSecond;
- extern ecs_entity_t EcsKiloBytesPerSecond;
- extern ecs_entity_t EcsMegaBytesPerSecond;
- extern ecs_entity_t EcsGigaBytesPerSecond;
+ extern     ecs_entity_t EcsBitsPerSecond;
+ extern     ecs_entity_t EcsKiloBitsPerSecond;
+ extern     ecs_entity_t EcsMegaBitsPerSecond;
+ extern     ecs_entity_t EcsGigaBitsPerSecond;
+ extern     ecs_entity_t EcsBytesPerSecond;
+ extern     ecs_entity_t EcsKiloBytesPerSecond;
+ extern     ecs_entity_t EcsMegaBytesPerSecond;
+ extern     ecs_entity_t EcsGigaBytesPerSecond;
  extern ecs_entity_t EcsAngle;
- extern ecs_entity_t EcsRadians;
- extern ecs_entity_t EcsDegrees;
+ extern     ecs_entity_t EcsRadians;
+ extern     ecs_entity_t EcsDegrees;
  extern ecs_entity_t EcsFrequency;
- extern ecs_entity_t EcsHertz;
- extern ecs_entity_t EcsKiloHertz;
- extern ecs_entity_t EcsMegaHertz;
- extern ecs_entity_t EcsGigaHertz;
+ extern     ecs_entity_t EcsHertz;
+ extern     ecs_entity_t EcsKiloHertz;
+ extern     ecs_entity_t EcsMegaHertz;
+ extern     ecs_entity_t EcsGigaHertz;
  extern ecs_entity_t EcsUri;
- extern ecs_entity_t EcsUriHyperlink;
- extern ecs_entity_t EcsUriImage;
- extern ecs_entity_t EcsUriFile;
+ extern     ecs_entity_t EcsUriHyperlink;
+ extern     ecs_entity_t EcsUriImage;
+ extern     ecs_entity_t EcsUriFile;
  extern ecs_entity_t EcsColor;
- extern ecs_entity_t EcsColorRgb;
- extern ecs_entity_t EcsColorHsl;
- extern ecs_entity_t EcsColorCss;
+ extern     ecs_entity_t EcsColorRgb;
+ extern     ecs_entity_t EcsColorHsl;
+ extern     ecs_entity_t EcsColorCss;
  extern ecs_entity_t EcsAcceleration;
  extern ecs_entity_t EcsPercentage;
  extern ecs_entity_t EcsBel;
  extern ecs_entity_t EcsDeciBel;
 void FlecsUnitsImport(
     ecs_world_t *world);
+typedef struct EcsScriptMouseEvent {
+    ecs_entity_t target;
+    float screen_x;
+    float screen_y;
+    float local_x;
+    float local_y;
+    float delta_x;
+    float delta_y;
+    int32_t button;
+    uint32_t buttons;
+    bool ctrl;
+    bool shift;
+    bool alt;
+    bool meta;
+} EcsScriptMouseEvent;
+typedef struct EcsScriptKeyboardEvent {
+    char *key;
+    bool down;
+    bool repeat;
+    bool ctrl;
+    bool shift;
+    bool alt;
+    bool meta;
+} EcsScriptKeyboardEvent;
+extern ecs_entity_t FLECS_IDEcsScriptMouseEventID_;
+extern ecs_entity_t FLECS_IDEcsScriptKeyboardEventID_;
+bool ecs_script_mouse_event(
+    ecs_world_t *world,
+    const EcsScriptMouseEvent *evt);
+void ecs_script_keyboard_event(
+    ecs_world_t *world,
+    const EcsScriptKeyboardEvent *evt);
+void FlecsScriptEventImport(
+    ecs_world_t *world);
 extern ecs_entity_t FLECS_IDEcsScriptID_;
 extern ecs_entity_t EcsScriptTemplate, FLECS_IDEcsScriptTemplateID_;
+extern ecs_entity_t EcsScriptTemplateManual, FLECS_IDEcsScriptTemplateManualID_;
+extern ecs_entity_t EcsScriptTemplatePending, FLECS_IDEcsScriptTemplatePendingID_;
+int ecs_script_template_update(
+    ecs_world_t *world,
+    ecs_entity_t instance,
+    ecs_entity_t template_entity);
 extern ecs_entity_t FLECS_IDEcsScriptConstVarID_;
+extern ecs_entity_t FLECS_IDEcsScriptMutVarID_;
 extern ecs_entity_t FLECS_IDEcsScriptFunctionID_;
 extern ecs_entity_t FLECS_IDEcsScriptMethodID_;
+extern ecs_entity_t EcsScriptVectorType, FLECS_IDEcsScriptVectorTypeID_;
 typedef struct ecs_script_template_t ecs_script_template_t;
+typedef struct ecs_script_template_ref_t {
+    ecs_entity_t type;
+    void *value;
+} ecs_script_template_ref_t;
+extern ecs_entity_t FLECS_IDecs_script_template_ref_tID_;
 typedef struct ecs_script_var_t {
     const char *name;
     ecs_value_t value;
     const ecs_type_info_t *type_info;
     int32_t sp;
     bool is_const;
+    bool owned;
 } ecs_script_var_t;
 typedef struct ecs_script_vars_t {
     struct ecs_script_vars_t *parent;
@@ -3299,10 +3587,15 @@ typedef struct EcsScript {
     char *error;
     ecs_script_t *script;
     ecs_script_template_t *template_;
+    ecs_vec_t observers;
+    ecs_vec_t dyn_observers;
+    bool skip_unknown;
+    bool ir;
 } EcsScript;
 typedef struct ecs_function_ctx_t {
     ecs_world_t *world;
     ecs_entity_t function;
+    ecs_entity_t entity;
     void *ctx;
 } ecs_function_ctx_t;
 typedef void(*ecs_function_callback_t)(
@@ -3310,33 +3603,127 @@ typedef void(*ecs_function_callback_t)(
     int32_t argc,
     const ecs_value_t *argv,
     ecs_value_t *result);
+typedef void(*ecs_vector_function_callback_t)(
+    const ecs_function_ctx_t *ctx,
+    int32_t argc,
+    const ecs_value_t *argv,
+    ecs_value_t *result,
+    int32_t elem_count);
 typedef struct ecs_script_parameter_t {
     const char *name;
     ecs_entity_t type;
 } ecs_script_parameter_t;
+typedef struct ecs_script_eval_desc_t {
+    ecs_script_runtime_t *runtime;
+    bool skip_unknown;
+    bool ir;
+} ecs_script_eval_desc_t;
+typedef struct ecs_script_eval_result_t {
+    char *error;
+    int32_t line;
+    int32_t column;
+} ecs_script_eval_result_t;
+extern ecs_entity_t FLECS_IDEcsScriptTaskID_;
+typedef struct ecs_script_future_t ecs_script_future_t;
+typedef struct ecs_script_task_t ecs_script_task_t;
+typedef void(*ecs_async_function_callback_t)(
+    const ecs_function_ctx_t *ctx,
+    int32_t argc,
+    const ecs_value_t *argv,
+    ecs_script_future_t *future);
+typedef void(*ecs_async_function_cancel_t)(
+    const ecs_function_ctx_t *ctx,
+    ecs_script_future_t *future);
+typedef struct EcsScriptTask {
+    ecs_vec_t tasks;
+} EcsScriptTask;
+typedef enum ecs_script_task_status_t {
+    EcsScriptTaskPending,
+    EcsScriptTaskDone,
+    EcsScriptTaskError,
+    EcsScriptTaskCancelled
+} ecs_script_task_status_t;
+typedef enum ecs_script_task_loop_t {
+    EcsScriptTaskLoopOnce,
+    EcsScriptTaskLoopCount,
+    EcsScriptTaskLoopForever
+} ecs_script_task_loop_t;
+typedef struct ecs_script_task_desc_t {
+    ecs_entity_t entity;
+    void *ctx;
+    ecs_ctx_free_t ctx_free;
+    ecs_script_task_loop_t loop;
+    int32_t iterations;
+} ecs_script_task_desc_t;
+ecs_script_task_t* ecs_script_task_new(
+    const ecs_script_t *script,
+    const ecs_script_task_desc_t *desc);
+ecs_script_task_status_t ecs_script_task_resume(
+    ecs_script_task_t *task,
+    ecs_script_eval_result_t *result);
+bool ecs_script_task_is_ready(
+    const ecs_script_task_t *task);
+void ecs_script_task_cancel(
+    ecs_script_task_t *task);
+void ecs_script_task_free(
+    ecs_script_task_t *task);
+int32_t ecs_script_tasks_progress(
+    ecs_world_t *world);
+int ecs_script_future_resolve(
+    ecs_script_future_t *future,
+    const ecs_value_t *value);
+int ecs_script_future_reject(
+    ecs_script_future_t *future,
+    const char *error);
+int ecs_script_future_reject_id(
+    ecs_script_future_t *future,
+    ecs_entity_t error,
+    const char *msg);
+bool ecs_script_future_is_cancelled(
+    const ecs_script_future_t *future);
+ecs_script_future_t* ecs_script_future_retain(
+    ecs_script_future_t *future);
+void ecs_script_future_release(
+    ecs_script_future_t *future);
+void ecs_script_future_set_ctx(
+    ecs_script_future_t *future,
+    void *ctx,
+    ecs_ctx_free_t ctx_free);
+void* ecs_script_future_get_ctx(
+    const ecs_script_future_t *future);
+typedef struct ecs_async_function_desc_t {
+    const char *name;
+    ecs_entity_t parent;
+    ecs_script_parameter_t params[(16)];
+    ecs_entity_t return_type;
+    ecs_async_function_callback_t callback;
+    ecs_async_function_cancel_t cancel;
+    void *ctx;
+} ecs_async_function_desc_t;
+ecs_entity_t ecs_async_function_init(
+    ecs_world_t *world,
+    const ecs_async_function_desc_t *desc);
 typedef struct EcsScriptConstVar {
     ecs_value_t value;
     const ecs_type_info_t *type_info;
 } EcsScriptConstVar;
-typedef struct EcsScriptFunction {
+typedef struct EcsScriptMutVar {
+    ecs_value_t value;
+    const ecs_type_info_t *type_info;
+} EcsScriptMutVar;
+struct ecs_script_function_t {
     ecs_entity_t return_type;
     ecs_vec_t params;
     ecs_function_callback_t callback;
+    ecs_async_function_callback_t async_callback;
+    ecs_async_function_cancel_t async_cancel;
+    ecs_vector_function_callback_t vector_callbacks[(18)];
     void *ctx;
-} EcsScriptFunction;
-typedef struct EcsScriptMethod {
-    ecs_entity_t return_type;
-    ecs_vec_t params;
-    ecs_function_callback_t callback;
-    void *ctx;
-} EcsScriptMethod;
-typedef struct ecs_script_eval_desc_t {
-    ecs_script_vars_t *vars;
-    ecs_script_runtime_t *runtime;
-} ecs_script_eval_desc_t;
-typedef struct ecs_script_eval_result_t {
-    char *error;
-} ecs_script_eval_result_t;
+    void *binding_ctx;
+    ecs_ctx_free_t binding_ctx_free;
+};
+typedef struct ecs_script_function_t EcsScriptFunction;
+typedef struct ecs_script_function_t EcsScriptMethod;
 ecs_script_t* ecs_script_parse(
     ecs_world_t *world,
     const char *name,
@@ -3354,9 +3741,21 @@ int ecs_script_run(
     const char *name,
     const char *code,
     ecs_script_eval_result_t *result);
+int ecs_script_run_w_desc(
+    ecs_world_t *world,
+    const char *name,
+    const char *code,
+    const ecs_script_eval_desc_t *desc,
+    ecs_script_eval_result_t *result);
 int ecs_script_run_file(
     ecs_world_t *world,
     const char *filename);
+int ecs_script_run_file_w_desc(
+    ecs_world_t *world,
+    const char *filename,
+    const ecs_script_eval_desc_t *desc);
+char* ecs_script_ir_to_str(
+    const ecs_script_t *script);
 ecs_script_runtime_t* ecs_script_runtime_new(void);
 void ecs_script_runtime_free(
     ecs_script_runtime_t *runtime);
@@ -3367,10 +3766,57 @@ int ecs_script_ast_to_buf(
 char* ecs_script_ast_to_str(
     ecs_script_t *script,
     bool colors);
+typedef struct ecs_script_source_t {
+    int32_t offset;
+    int32_t length;
+    int32_t line;
+    int32_t column;
+    bool has_scope;
+    ecs_entity_t template_;
+} ecs_script_source_t;
+bool ecs_script_entity_source(
+    const ecs_script_t *script,
+    ecs_entity_t entity,
+    ecs_script_source_t *source);
+ecs_entity_t ecs_script_entity_owner(
+    const ecs_world_t *world,
+    ecs_entity_t entity);
+typedef struct ecs_script_edits_t ecs_script_edits_t;
+ecs_script_edits_t* ecs_script_edits_new(
+    ecs_script_t *script);
+void ecs_script_edits_free(
+    ecs_script_edits_t *edits);
+int ecs_script_edits_set(
+    ecs_script_edits_t *edits,
+    ecs_entity_t entity,
+    ecs_id_t component,
+    const void *value);
+int ecs_script_edits_set_expr(
+    ecs_script_edits_t *edits,
+    ecs_entity_t entity,
+    ecs_id_t component,
+    const char *expr);
+int ecs_script_edits_remove(
+    ecs_script_edits_t *edits,
+    ecs_entity_t entity,
+    ecs_id_t component);
+int ecs_script_edits_delete(
+    ecs_script_edits_t *edits,
+    ecs_entity_t entity);
+int ecs_script_edits_clear(
+    ecs_script_edits_t *edits,
+    ecs_entity_t entity,
+    ecs_id_t component);
+int32_t ecs_script_edits_count(
+    const ecs_script_edits_t *edits);
+char* ecs_script_edits_apply(
+    const ecs_script_edits_t *edits);
 typedef struct ecs_script_desc_t {
     ecs_entity_t entity;
     const char *filename;
     const char *code;
+    bool skip_unknown;
+    bool ir;
 } ecs_script_desc_t;
 ecs_entity_t ecs_script_init(
     ecs_world_t *world,
@@ -3380,10 +3826,20 @@ int ecs_script_update(
     ecs_entity_t script,
     ecs_entity_t instance,
     const char *code);
+int ecs_script_reload(
+    ecs_world_t *world,
+    ecs_entity_t script,
+    const char *code);
 void ecs_script_clear(
     ecs_world_t *world,
     ecs_entity_t script,
     ecs_entity_t instance);
+int ecs_script_from_scene(
+    ecs_world_t *world,
+    ecs_entity_t script);
+int ecs_script_save(
+    ecs_world_t *world,
+    ecs_entity_t script);
 ecs_script_vars_t* ecs_script_vars_init(
     ecs_world_t *world);
 void ecs_script_vars_fini(
@@ -3459,20 +3915,71 @@ ecs_entity_t ecs_const_var_init(
 ecs_value_t ecs_const_var_get(
     const ecs_world_t *world,
     ecs_entity_t var);
+void* ecs_const_var_get_w_type(
+    const ecs_world_t *world,
+    const char *name,
+    ecs_entity_t type,
+    ecs_size_t size,
+    void *out);
+typedef struct ecs_mut_var_desc_t {
+    const char *name;
+    ecs_entity_t parent;
+    ecs_entity_t type;
+    void *value;
+} ecs_mut_var_desc_t;
+ecs_entity_t ecs_mut_var_init(
+    ecs_world_t *world,
+    ecs_mut_var_desc_t *desc);
+ecs_value_t ecs_mut_var_get(
+    const ecs_world_t *world,
+    ecs_entity_t var);
+void* ecs_mut_var_get_w_type(
+    const ecs_world_t *world,
+    const char *name,
+    ecs_entity_t type,
+    ecs_size_t size,
+    void *out);
+int ecs_mut_var_set_w_type(
+    ecs_world_t *world,
+    const char *name,
+    ecs_entity_t type,
+    ecs_size_t size,
+    const void *value);
+void ecs_mut_var_modified(
+    ecs_world_t *world,
+    ecs_entity_t var);
+typedef struct ecs_vector_fn_callbacks_t {
+    ecs_vector_function_callback_t i8;
+    ecs_vector_function_callback_t i32;
+} ecs_vector_fn_callbacks_t;
 typedef struct ecs_function_desc_t {
     const char *name;
     ecs_entity_t parent;
     ecs_script_parameter_t params[(16)];
     ecs_entity_t return_type;
     ecs_function_callback_t callback;
+    ecs_vector_function_callback_t vector_callbacks[(18)];
     void *ctx;
 } ecs_function_desc_t;
 ecs_entity_t ecs_function_init(
     ecs_world_t *world,
     const ecs_function_desc_t *desc);
+int ecs_function_call(
+    ecs_world_t *world,
+    ecs_entity_t function,
+    int32_t argc,
+    const ecs_value_t *argv,
+    ecs_value_t *result);
 ecs_entity_t ecs_method_init(
     ecs_world_t *world,
     const ecs_function_desc_t *desc);
+int ecs_method_call(
+    ecs_world_t *world,
+    ecs_entity_t method,
+    const ecs_value_t *instance,
+    int32_t argc,
+    const ecs_value_t *argv,
+    ecs_value_t *result);
 char* ecs_ptr_to_expr(
     const ecs_world_t *world,
     ecs_entity_t type,
@@ -3563,6 +4070,7 @@ typedef intptr_t ecs_iptr_t;
 typedef float ecs_f32_t;
 typedef double ecs_f64_t;
 typedef char* ecs_string_t;
+ extern ecs_entity_t FlecsMeta;
  extern const ecs_entity_t FLECS_IDEcsTypeID_;
  extern const ecs_entity_t FLECS_IDEcsTypeSerializerID_;
  extern const ecs_entity_t FLECS_IDEcsPrimitiveID_;
@@ -3574,6 +4082,7 @@ typedef char* ecs_string_t;
  extern const ecs_entity_t FLECS_IDEcsStructID_;
  extern const ecs_entity_t FLECS_IDEcsArrayID_;
  extern const ecs_entity_t FLECS_IDEcsVectorID_;
+ extern const ecs_entity_t FLECS_IDEcsMapID_;
  extern const ecs_entity_t FLECS_IDEcsOpaqueID_;
  extern const ecs_entity_t FLECS_IDEcsUnitID_;
  extern const ecs_entity_t FLECS_IDEcsUnitPrefixID_;
@@ -3596,6 +4105,7 @@ typedef char* ecs_string_t;
  extern const ecs_entity_t FLECS_IDecs_string_tID_;
  extern const ecs_entity_t FLECS_IDecs_entity_tID_;
  extern const ecs_entity_t FLECS_IDecs_id_tID_;
+ extern const ecs_entity_t FLECS_IDecs_value_tID_;
 typedef enum ecs_type_kind_t {
     EcsPrimitiveType,
     EcsBitmaskType,
@@ -3604,7 +4114,9 @@ typedef enum ecs_type_kind_t {
     EcsArrayType,
     EcsVectorType,
     EcsOpaqueType,
-    EcsTypeKindLast = EcsOpaqueType
+    EcsMapType,
+    EcsValueType,
+    EcsTypeKindLast = EcsValueType
 } ecs_type_kind_t;
 typedef struct EcsType {
     ecs_type_kind_t kind;
@@ -3696,6 +4208,10 @@ typedef struct EcsArray {
 typedef struct EcsVector {
     ecs_entity_t type;
 } EcsVector;
+typedef struct EcsMap {
+    ecs_entity_t key_type;
+    ecs_entity_t type;
+} EcsMap;
 typedef struct ecs_serializer_t {
     int (*value)(
         const struct ecs_serializer_t *ser,
@@ -3784,6 +4300,8 @@ typedef enum ecs_meta_op_kind_t {
     EcsOpPushStruct,
     EcsOpPushArray,
     EcsOpPushVector,
+    EcsOpPushMap,
+    EcsOpPushValue,
     EcsOpPop,
     EcsOpOpaqueStruct,
     EcsOpOpaqueArray,
@@ -3844,6 +4362,8 @@ typedef struct ecs_meta_scope_t {
     const EcsOpaque *opaque;
     ecs_hashmap_t *members;
     bool is_collection;
+    bool is_map;
+    bool is_value;
     bool is_empty_scope;
     bool is_moved_scope;
     int32_t elem, elem_count;
@@ -3874,6 +4394,9 @@ int ecs_meta_elem(
 int ecs_meta_member(
     ecs_meta_cursor_t *cursor,
     const char *name);
+int ecs_meta_key(
+    ecs_meta_cursor_t *cursor,
+    const ecs_value_t *key);
 int ecs_meta_try_member(
     ecs_meta_cursor_t *cursor,
     const char *name);
@@ -3888,6 +4411,8 @@ int ecs_meta_push(
 int ecs_meta_pop(
     ecs_meta_cursor_t *cursor);
 bool ecs_meta_is_collection(
+    const ecs_meta_cursor_t *cursor);
+bool ecs_meta_is_map(
     const ecs_meta_cursor_t *cursor);
 ecs_entity_t ecs_meta_get_type(
     const ecs_meta_cursor_t *cursor);
@@ -3951,6 +4476,115 @@ double ecs_meta_ptr_to_float(
 ecs_size_t ecs_meta_op_get_elem_count(
     const ecs_meta_op_t *op,
     const void *ptr);
+ecs_entity_t ecs_constant_to_entity_id(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    int64_t value);
+int ecs_ptr_init(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    void *ptr);
+int ecs_ptr_init_w_type_info(
+    const ecs_world_t *world,
+    const ecs_type_info_t *ti,
+    void *ptr);
+void* ecs_ptr_new(
+    ecs_world_t *world,
+    ecs_entity_t type);
+void* ecs_ptr_new_w_type_info(
+    ecs_world_t *world,
+    const ecs_type_info_t *ti);
+int ecs_ptr_fini_w_type_info(
+    const ecs_world_t *world,
+    const ecs_type_info_t *ti,
+    void *ptr);
+int ecs_ptr_fini(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    void* ptr);
+int ecs_ptr_free_w_type_info(
+    ecs_world_t *world,
+    const ecs_type_info_t *ti,
+    void* ptr);
+int ecs_ptr_free(
+    ecs_world_t *world,
+    ecs_entity_t type,
+    void* ptr);
+int ecs_ptr_copy_w_type_info(
+    const ecs_world_t *world,
+    const ecs_type_info_t *ti,
+    void* dst,
+    const void *src);
+int ecs_ptr_copy(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    void* dst,
+    const void *src);
+int ecs_ptr_move_w_type_info(
+    const ecs_world_t *world,
+    const ecs_type_info_t *ti,
+    void* dst,
+    void *src);
+int ecs_ptr_move(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    void* dst,
+    void *src);
+int ecs_ptr_move_ctor_w_type_info(
+    const ecs_world_t *world,
+    const ecs_type_info_t *ti,
+    void* dst,
+    void *src);
+int ecs_ptr_move_ctor(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    void* dst,
+    void *src);
+void ecs_value_set(
+    const ecs_world_t *world,
+    ecs_value_t *v,
+    ecs_entity_t type,
+    const void *ptr);
+ecs_value_t ecs_value_new(
+    const ecs_world_t *world,
+    ecs_entity_t type);
+ecs_value_t ecs_value_init(
+    const ecs_world_t *world,
+    ecs_entity_t type,
+    const void *ptr);
+void ecs_value_fini(
+    const ecs_world_t *world,
+    ecs_value_t *v);
+void ecs_value_copy(
+    const ecs_world_t *world,
+    ecs_value_t *dst,
+    const ecs_value_t *src);
+void ecs_value_copy_ctor(
+    const ecs_world_t *world,
+    ecs_value_t *dst,
+    const ecs_value_t *src);
+void ecs_value_move(
+    const ecs_world_t *world,
+    ecs_value_t *dst,
+    ecs_value_t *src);
+void ecs_value_move_ctor(
+    const ecs_world_t *world,
+    ecs_value_t *dst,
+    ecs_value_t *src);
+int ecs_value_compare(
+    const ecs_world_t *world,
+    const ecs_value_t *a,
+    const ecs_value_t *b);
+bool ecs_value_equals(
+    const ecs_world_t *world,
+    const ecs_value_t *a,
+    const ecs_value_t *b);
+int ecs_set_rtt_compare(
+    ecs_world_t *world,
+    ecs_entity_t type);
+int ecs_set_rtt_equals(
+    ecs_world_t *world,
+    ecs_entity_t type);
 typedef struct ecs_primitive_desc_t {
     ecs_entity_t entity;
     ecs_primitive_kind_t kind;
@@ -3988,13 +4622,34 @@ typedef struct ecs_vector_desc_t {
 ecs_entity_t ecs_vector_init(
     ecs_world_t *world,
     const ecs_vector_desc_t *desc);
+typedef struct ecs_map_desc_t {
+    ecs_entity_t entity;
+    ecs_entity_t key_type;
+    ecs_entity_t type;
+} ecs_map_desc_t;
+ecs_entity_t ecs_map_type_init(
+    ecs_world_t *world,
+    const ecs_map_desc_t *desc);
 typedef struct ecs_struct_desc_t {
     ecs_entity_t entity;
     ecs_member_t members[(32)];
+    bool create_member_entities;
 } ecs_struct_desc_t;
 ecs_entity_t ecs_struct_init(
     ecs_world_t *world,
     const ecs_struct_desc_t *desc);
+int ecs_struct_add_member(
+    ecs_world_t *world,
+    ecs_entity_t type,
+    const ecs_member_t *member);
+ecs_member_t* ecs_struct_get_member(
+    ecs_world_t *world,
+    ecs_entity_t type,
+    const char *name);
+ecs_member_t* ecs_struct_get_nth_member(
+    ecs_world_t *world,
+    ecs_entity_t type,
+    int32_t i);
 typedef struct ecs_opaque_desc_t {
     ecs_entity_t entity;
     EcsOpaque type;
@@ -4066,19 +4721,25 @@ char* ecs_cpp_get_constant_name(
 const char* ecs_cpp_trim_module(
     ecs_world_t *world,
     const char *type_name);
+typedef void (*ecs_cpp_type_action_t)(
+    ecs_world_t *world,
+    ecs_entity_t component);
+typedef struct ecs_cpp_component_desc_t {
+    ecs_entity_t id;
+    int32_t ids_index;
+    const char *name;
+    const char *cpp_name;
+    const char *cpp_symbol;
+    size_t size;
+    size_t alignment;
+    ecs_cpp_type_action_t lifecycle_action;
+    ecs_cpp_type_action_t enum_action;
+    bool is_component;
+    bool explicit_registration;
+} ecs_cpp_component_desc_t;
 ecs_entity_t ecs_cpp_component_register(
     ecs_world_t *world,
-    ecs_entity_t id,
-    int32_t ids_index,
-    const char *name,
-    const char *cpp_name,
-    const char *cpp_symbol,
-    size_t size,
-    size_t alignment,
-    bool is_component,
-    bool explicit_registration,
-    bool *registered_out,
-    bool *existing_out);
+    const ecs_cpp_component_desc_t *desc);
 void ecs_cpp_enum_init(
     ecs_world_t *world,
     ecs_entity_t id,
@@ -4092,6 +4753,8 @@ ecs_entity_t ecs_cpp_enum_constant_register(
     ecs_entity_t value_type,
     size_t value_size);
 typedef struct ecs_cpp_get_mut_t {
+    ecs_world_t *world;
+    ecs_stage_t *stage;
     void *ptr;
     bool call_modified;
 } ecs_cpp_get_mut_t;
@@ -4107,7 +4770,13 @@ typedef struct ecs_cpp_get_mut_t {
     ecs_id_t component,
     const void *new_ptr,
     size_t size);
-const ecs_member_t* ecs_cpp_last_member(
+ ecs_entity_t ecs_cpp_new(
+    ecs_world_t *world,
+    ecs_entity_t parent,
+    const char *name,
+    const char *sep,
+    const char *root_sep);
+ecs_member_t* ecs_cpp_last_member(
     const ecs_world_t *world,
     ecs_entity_t type);
 ]]
@@ -4342,15 +5011,14 @@ ffi.metatype('ecs_world_t', {
     set_default_query_flags = function (self, flags)
       ffi.C.ecs_set_default_query_flags(self, flags)
     end,
-    new = function (self, arg1, arg2, arg3)
+    new = function (self, arg1, arg2)
       local entity
       local name
-      local components
 
       if not arg1 and not arg2 then
         --  entity | name(string)
         entity = ffi.C.ecs_new(self)
-      elseif arg2 and not arg3 then
+      elseif arg2 then
         if is_entity(arg1) then
           -- entity, name (string)
           entity = arg1
@@ -4360,15 +5028,14 @@ ffi.metatype('ecs_world_t', {
             error('Expected a name after the entity.', 2)
           end
         else
-          -- name (string|nil), components
-          name = arg1
-          components = arg2
+          error('Expected an entity ID followed by a name.', 2)
         end
-      elseif arg1 and arg3 then
-        -- entity, name (string|nil), components
-        entity = arg1
-        name = arg2
-        components = arg3
+      elseif arg1 then
+        -- name (string)
+        if type(arg1) ~= 'string' then
+          error('Expected a name.', 2)
+        end
+        name = arg1
       end
 
       if entity and name and ffi.C.ecs_is_alive(self, entity) then
@@ -4390,7 +5057,7 @@ ffi.metatype('ecs_world_t', {
       end
 
       -- Create an entity, the following functions will take the same ID.
-      if (not entity or entity == 0) and (arg1 or arg2) then
+      if (not entity or entity == 0) and name then
         entity = ffi.C.ecs_new(self)
       end
 
@@ -4401,11 +5068,6 @@ ffi.metatype('ecs_world_t', {
       local scope = ffi.C.ecs_get_scope(self)
       if scope ~= 0 then
         ecs_add_pair(self, entity, ffi.C.EcsChildOf, scope)
-      end
-
-      if components then
-        -- TODO: Check whether this creates under the current scope, if any.
-        entity = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ id = entity, add_expr = components }))
       end
 
       if name then
@@ -4779,10 +5441,6 @@ ffi.metatype(ecs_world_info_t, {
 
     buf:put 'Last component id: '
     buf:put(self.last_component_id)
-    buf:put '\nMin id: '
-    buf:put(self.min_id)
-    buf:put '\nMax id: '
-    buf:put(self.max_id)
     buf:put '\nDelta time raw: '
     buf:put(self.delta_time_raw)
     buf:put '\nDelta time: '
@@ -4823,10 +5481,12 @@ ffi.metatype(ecs_world_info_t, {
     buf:put(self.table_delete_total)
     buf:put '\nPipeline build count total: '
     buf:put(self.pipeline_build_count_total)
-    buf:put '\nSystems ran frame: '
-    buf:put(self.systems_ran_frame)
-    buf:put '\nObservers ran frame: '
-    buf:put(self.observers_ran_frame)
+    buf:put '\nSystems ran total: '
+    buf:put(self.systems_ran_total)
+    buf:put '\nObservers ran total: '
+    buf:put(self.observers_ran_total)
+    buf:put '\nQueries ran total: '
+    buf:put(self.queries_ran_total)
     buf:put '\nTag id count: '
     buf:put(self.tag_id_count)
     buf:put '\nComponent id count: '
@@ -4835,6 +5495,8 @@ ffi.metatype(ecs_world_info_t, {
     buf:put(self.pair_id_count)
     buf:put '\nTable count: '
     buf:put(self.table_count)
+    buf:put('\nCreation time:')
+    buf:put(self.creation_time)
     buf:put '\nCommand add count: '
     buf:put(self.cmd.add_count)
     buf:put '\nCommand remove count: '

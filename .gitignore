@@ -43,4 +43,4 @@
 *.pdb
 
 *build*
-vendor/luajit
+vendor/luajit/include/luajit-2.1/*.h

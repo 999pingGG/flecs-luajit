@@ -228,15 +228,14 @@ ffi.metatype('ecs_world_t', {
     set_default_query_flags = function (self, flags)
       ffi.C.ecs_set_default_query_flags(self, flags)
     end,
-    new = function (self, arg1, arg2, arg3)
+    new = function (self, arg1, arg2)
       local entity
       local name
-      local components
 
       if not arg1 and not arg2 then
         --  entity | name(string)
         entity = ffi.C.ecs_new(self)
-      elseif arg2 and not arg3 then
+      elseif arg2 then
         if is_entity(arg1) then
           -- entity, name (string)
           entity = arg1
@@ -246,15 +245,14 @@ ffi.metatype('ecs_world_t', {
             error('Expected a name after the entity.', 2)
           end
         else
-          -- name (string|nil), components
-          name = arg1
-          components = arg2
+          error('Expected an entity ID followed by a name.', 2)
         end
-      elseif arg1 and arg3 then
-        -- entity, name (string|nil), components
-        entity = arg1
-        name = arg2
-        components = arg3
+      elseif arg1 then
+        -- name (string)
+        if type(arg1) ~= 'string' then
+          error('Expected a name.', 2)
+        end
+        name = arg1
       end
 
       if entity and name and ffi.C.ecs_is_alive(self, entity) then
@@ -276,7 +274,7 @@ ffi.metatype('ecs_world_t', {
       end
 
       -- Create an entity, the following functions will take the same ID.
-      if (not entity or entity == 0) and (arg1 or arg2) then
+      if (not entity or entity == 0) and name then
         entity = ffi.C.ecs_new(self)
       end
 
@@ -287,11 +285,6 @@ ffi.metatype('ecs_world_t', {
       local scope = ffi.C.ecs_get_scope(self)
       if scope ~= 0 then
         ecs_add_pair(self, entity, ffi.C.EcsChildOf, scope)
-      end
-
-      if components then
-        -- TODO: Check whether this creates under the current scope, if any.
-        entity = ffi.C.ecs_entity_init(self, ecs_entity_desc_t({ id = entity, add_expr = components }))
       end
 
       if name then
@@ -665,10 +658,6 @@ ffi.metatype(ecs_world_info_t, {
 
     buf:put 'Last component id: '
     buf:put(self.last_component_id)
-    buf:put '\nMin id: '
-    buf:put(self.min_id)
-    buf:put '\nMax id: '
-    buf:put(self.max_id)
     buf:put '\nDelta time raw: '
     buf:put(self.delta_time_raw)
     buf:put '\nDelta time: '
@@ -709,10 +698,12 @@ ffi.metatype(ecs_world_info_t, {
     buf:put(self.table_delete_total)
     buf:put '\nPipeline build count total: '
     buf:put(self.pipeline_build_count_total)
-    buf:put '\nSystems ran frame: '
-    buf:put(self.systems_ran_frame)
-    buf:put '\nObservers ran frame: '
-    buf:put(self.observers_ran_frame)
+    buf:put '\nSystems ran total: '
+    buf:put(self.systems_ran_total)
+    buf:put '\nObservers ran total: '
+    buf:put(self.observers_ran_total)
+    buf:put '\nQueries ran total: '
+    buf:put(self.queries_ran_total)
     buf:put '\nTag id count: '
     buf:put(self.tag_id_count)
     buf:put '\nComponent id count: '
@@ -721,6 +712,8 @@ ffi.metatype(ecs_world_info_t, {
     buf:put(self.pair_id_count)
     buf:put '\nTable count: '
     buf:put(self.table_count)
+    buf:put('\nCreation time:')
+    buf:put(self.creation_time)
     buf:put '\nCommand add count: '
     buf:put(self.cmd.add_count)
     buf:put '\nCommand remove count: '

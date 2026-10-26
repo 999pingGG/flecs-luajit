@@ -157,7 +157,8 @@ end)
 assert(not success, 'Creating a struct with invalid name succeeded.')
 
 local mixed = world2:new_struct('MixedTypes', '{float foo;i32 bar;}')
-entity = world2:new('Mixed entity', 'MixedTypes')
+entity = world2:new('Mixed entity')
+world2:add(entity, mixed)
 world2:set(entity, mixed, { foo = 123.456, bar = 12.84 })
 
 local value = world2:get(entity, mixed)
@@ -229,10 +230,15 @@ local velocity = world:new_struct('Velocity', '{ double x; double y; double z; }
 
 entities = {}
 for i = 1, 10 do
-  table.insert(entities, world:new('Particle #' .. i, 'Translation, Velocity'))
-  print(world:name(entities[i]))
-  print('Translation: ' .. tostring(world:get(entities[i], translation)))
-  print('Velocity: ' .. tostring(world:get(entities[i], velocity)))
+  local particle = world:new('Particle #' .. i)
+  world:add(particle, translation)
+  world:add(particle, velocity)
+  table.insert(entities, particle)
+  local name = world:name(entities[i])
+  assert(name == 'Particle #' .. i)
+  assert(tostring(world:get(entities[i], translation)) == '{x: 0, y: 0, z: 0}')
+  assert(tostring(world:get(entities[i], velocity)) == '{x: 0, y: 0, z: 0}')
+  print(name .. ' has translation and velocity')
 end
 
 print 'All tests passed successfully!'

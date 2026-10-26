@@ -11,9 +11,9 @@ set_target_properties(flecs_luajit PROPERTIES ENABLE_EXPORTS 1)
 
 target_include_directories(flecs_luajit PRIVATE include vendor/flecs)
 if(WIN32)
-  target_include_directories(flecs_luajit PRIVATE vendor/luajit)
-  target_link_directories(flecs_luajit PRIVATE vendor/luajit)
-  target_link_libraries(flecs_luajit PRIVATE lua51)
+  target_include_directories(flecs_luajit PRIVATE vendor/luajit/include)
+  target_link_directories(flecs_luajit PRIVATE vendor/luajit/lib)
+  target_link_libraries(flecs_luajit PRIVATE lua51.lib)
 else()
   target_link_libraries(flecs_luajit PRIVATE luajit-5.1)
 endif()
@@ -21,20 +21,22 @@ endif()
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT flecs_luajit)
 
 set(PREPROCESS_DEPS
+  ${CMAKE_SOURCE_DIR}/utils/preprocess.ps1
+  ${CMAKE_SOURCE_DIR}/utils/preprocess.sh
   ${CMAKE_SOURCE_DIR}/vendor/flecs/flecs.h
   ${CMAKE_SOURCE_DIR}/src/ecs.lua
   ${CMAKE_SOURCE_DIR}/src/tests.lua)
 
 if(WIN32)
-  set(PREPROCESS_SCRIPT .\\utils\\preprocess.bat)
+  set(PREPROCESS_COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File .\\utils\\preprocess.ps1)
 else()
-  set(PREPROCESS_SCRIPT ./utils/preprocess.sh)
+  set(PREPROCESS_COMMAND ./utils/preprocess.sh)
 endif()
 
 add_custom_command(
   COMMENT "Regenerating distr/ecs.lua"
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/preprocess.stamp
-  COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR} ${PREPROCESS_SCRIPT}
+  COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR} ${PREPROCESS_COMMAND}
   COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/preprocess.stamp
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/distr/ecs.lua ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/src/tests.lua ${CMAKE_CURRENT_BINARY_DIR}
@@ -45,3 +47,9 @@ add_custom_target(regenerate_distribution_script_and_copy_scripts
 )
 
 add_dependencies(flecs_luajit regenerate_distribution_script_and_copy_scripts)
+
+add_custom_command(TARGET flecs_luajit POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_CURRENT_SOURCE_DIR}/vendor/luajit/lib/lua51.dll"
+            "$<TARGET_FILE_DIR:flecs_luajit>"
+        VERBATIM)

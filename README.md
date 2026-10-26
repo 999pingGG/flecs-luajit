@@ -8,17 +8,17 @@ implemented yet. Based on [https://github.com/flecs-hub/flecs-lua/]()
 
 ## How to build and run the tests
 
-- Do a standard CMake build. This will automagically run `utils/preprocess.(sh|bat)` having the project root as the
+- Do a standard CMake build. This will automagically run `utils/preprocess.sh or utils/preprocess.ps1` having the project root as the
 current working directory every time the Lua source or the Flecs header change. The script generates the FFI cdefs for
 Flecs from `vendor/flecs/flecs.h`, appends `src/ecs.lua` and generates the final Lua file, ready to use, in
-`distr/ecs.lua`. In Windows, you need to have `cl.exe` available in your `PATH`. One way to do it is by executing it in
-a "Command Prompt for VS 20xx," available from the start menu. The output is equivalent to LuaJIT, but it is uglier. I
-wouldn't use it to generate the distribution Lua file that is to be committed.
+`distr/ecs.lua`. In W\*ndows, you need PowerShell and `cl.exe` available in your `PATH`, for example by executing it in
+a "Command Prompt for VS 20xx," available from the start menu.
 - Download, compile and install LuaJIT following the directions in the [official webpage](https://luajit.org/), or just
-install it from your distro's package repositories, but I don't personally use those. For Windows, after compiling
-LuaJIT, copy or symlink `lua51.lib` found at `luajit/src` after the build to a new directory under this project's root
-`vendor/luajit`. Copy `lua.h`, `luaconf.h`, `lualib.h` and `lauxlib.h` to a new directory `vendor/lua/luajit-2.1`. Blame
-W*ndows for not having a standard way to install development libraries.
+install it from your distro's package repositories, but I haven't tried this.
+- **For W\*ndows only**: after compiling LuaJIT, copy or symlink `lua51.dll`, `lua51.exp`, `lua51.lib` and `lua51.pdb`
+found at `luajit/src` after the build to this project's directory `vendor/luajit/lib`. Copy `lua.h`, `luaconf.h`,
+`lualib.h` and `lauxlib.h` to `vendor/luajit/include/luajit-2.1`. Blame W*ndows for not having a standard way to
+install development libraries.
 - When running the test program, make sure the `distr/ecs.lua` and `src/tests.lua` files are available in the current
 working directory. CMake takes care of this automatically (copies the files to the binary directory).
 
@@ -26,7 +26,7 @@ working directory. CMake takes care of this automatically (copies the files to t
 
 On the Lua side, you only need `distr/ecs.lua`, the standard Lua libraries, and the FFI, BitOp and string buffer
 LuaJIT libraries, all included with the latest LuaJIT commits. On the C side, your app needs to export Flecs' symbols,
-which *nix compilers do by default. For Windows, you need to comment out the second line `#define flecs_STATIC` in
+which *nix compilers do by default. For W\*ndows, you need to comment out the second line `#define flecs_STATIC` in
 `flecs.h` and define `flecs_EXPORTS`, probably unless you use Flecs as a DLL, but I haven't tested this. Also, it's
 important to define `FLECS_SOFT_ASSERT` to make Flecs do some checks and allow for recoverable errors, specially if you
 run third-party code, like game mods! Finally, just run `ecs.lua` however you want. It returns the entire module as a
@@ -37,7 +37,7 @@ table.
 When running `utils/preprocess.sh`, any arguments you pass will be forwarded to `cc`. Therefore, you are able to
 customize Flecs' macros. Notably, you can customize `ecs_float_t` and `ecs_ftime_t` to use double precision, for
 example with `./utils/preprocess.sh -Decs_ftime_t=double -Decs_float_t=double`. You MUST make sure to preprocess and
-compile `flecs.c` with the same definitions, otherwise chaos will ensure!
+compile `flecs.c` with the same definitions, otherwise chaos will ensue!
 
 ## Caveats
 
